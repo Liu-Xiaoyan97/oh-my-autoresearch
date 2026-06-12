@@ -1,0 +1,76 @@
+name: nn_architecture
+version: 0.1.0
+
+runtime_root: runtime
+
+copy_if_missing:
+  # Objective
+  - from: templates/nn_architecture/runtime/objective/objective.yaml
+    to: runtime/objective/objective.yaml
+
+  # State
+  - from: templates/nn_architecture/runtime/state/state.json
+    to: runtime/state/state.json
+
+  - from: templates/nn_architecture/runtime/state/current_iteration.json
+    to: runtime/state/current_iteration.json
+
+  - from: templates/nn_architecture/runtime/state/val_loss.json
+    to: runtime/state/val_loss.json
+
+  # History
+  - from: templates/nn_architecture/runtime/history/timeline.json
+    to: runtime/history/timeline.json
+
+  # Knowledge
+  - from: templates/nn_architecture/runtime/knowledge/learned_patterns.md
+    to: runtime/knowledge/learned_patterns.md
+
+  - from: templates/nn_architecture/runtime/knowledge/rejected_ideas.md
+    to: runtime/knowledge/rejected_ideas.md
+
+  # Experiments
+  - from: templates/nn_architecture/runtime/experiments/best.json
+    to: runtime/experiments/best.json
+
+ensure_dirs:
+  - runtime/objective
+  - runtime/state
+  - runtime/history
+  - runtime/knowledge
+  - runtime/debates
+  - runtime/experiments
+
+never_overwrite:
+  # User-owned objective
+  - runtime/objective/objective.yaml
+
+  # Runtime state
+  - runtime/state/state.json
+  - runtime/state/current_iteration.json
+  - runtime/state/val_loss.json
+
+  # Runtime history
+  - runtime/history/timeline.json
+
+  # Runtime knowledge
+  - runtime/knowledge/learned_patterns.md
+  - runtime/knowledge/rejected_ideas.md
+
+  # Runtime generated records
+  - runtime/debates
+  - runtime/experiments
+
+runtime_required:
+  - runtime/objective/objective.yaml
+  - runtime/state/state.json
+  - runtime/state/current_iteration.json
+  - runtime/state/val_loss.json
+  - runtime/history/timeline.json
+  - runtime/knowledge/learned_patterns.md
+  - runtime/knowledge/rejected_ideas.md
+  - runtime/experiments/best.json
+
+runtime_generated_patterns:
+  - runtime/debates/<exp_name>.md
+  - runtime/experiments/<exp_name>.json

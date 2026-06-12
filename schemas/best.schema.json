@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Best Experiment",
+  "type": "object",
+  "required": ["metric", "mode", "best"],
+  "properties": {
+    "metric": {
+      "type": "string",
+      "const": "val_loss"
+    },
+    "mode": {
+      "type": "string",
+      "const": "minimize"
+    },
+    "best": {
+      "type": ["object", "null"],
+      "properties": {
+        "exp_name": {
+          "type": "string"
+        },
+        "iteration": {
+          "type": "integer"
+        },
+        "best_val_loss": {
+          "type": "number"
+        },
+        "final_val_loss": {
+          "type": ["number", "null"]
+        },
+        "best_epoch": {
+          "type": ["integer", "null"]
+        },
+        "architecture_change": {
+          "type": ["string", "null"]
+        },
+        "hypothesis": {
+          "type": ["string", "null"]
+        },
+        "updated_at": {
+          "type": ["string", "null"]
+        }
+      }
+    }
+  }
+}

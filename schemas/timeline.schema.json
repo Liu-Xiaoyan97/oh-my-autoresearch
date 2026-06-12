@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Timeline",
+  "type": "object",
+  "required": ["events"],
+  "properties": {
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "time",
+          "iteration",
+          "exp_name",
+          "event_type",
+          "summary"
+        ],
+        "properties": {
+          "time": {
+            "type": "string"
+          },
+          "iteration": {
+            "type": "integer"
+          },
+          "exp_name": {
+            "type": ["string", "null"]
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "phase": {
+            "type": ["string", "null"]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "best_val_loss": {
+            "type": ["number", "null"]
+          },
+          "is_new_best": {
+            "type": ["boolean", "null"]
+          }
+        }
+      }
+    }
+  }
+}

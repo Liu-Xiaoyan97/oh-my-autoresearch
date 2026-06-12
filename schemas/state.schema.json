@@ -1,6 +1,54 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "state",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Workflow State",
   "type": "object",
-  "properties": {}
+  "required": [
+    "workflow_status",
+    "phase",
+    "phase_step",
+    "iteration",
+    "current_exp_name",
+    "next_phase",
+    "blocked",
+    "block_reason",
+    "last_error",
+    "updated_at"
+  ],
+  "properties": {
+    "workflow_status": {
+      "type": "string",
+      "enum": ["running", "blocked", "done"]
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["A", "B", "C", "D", "E", "F", "BLOCKED", "DONE"]
+    },
+    "phase_step": {
+      "type": ["string", "null"]
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "current_exp_name": {
+      "type": ["string", "null"]
+    },
+    "next_phase": {
+      "type": ["string", "null"],
+      "enum": ["A", "B", "C", "D", "E", "F", "BLOCKED", "DONE", null]
+    },
+    "blocked": {
+      "type": "boolean"
+    },
+    "block_reason": {
+      "type": ["string", "null"]
+    },
+    "last_error": {
+      "type": ["string", "null"]
+    },
+    "updated_at": {
+      "type": ["string", "null"]
+    }
+  },
+  "additionalProperties": false
 }
