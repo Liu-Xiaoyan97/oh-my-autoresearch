@@ -539,6 +539,7 @@ oh-my-autoresearch/
 │   ├── best.schema.json
 │   ├── current_iteration.schema.json
 │   ├── objective.schema.json
+│   ├── phase_b_agentteam_output.schema.json
 │   ├── timeline.schema.json
 │   ├── val_loss.schema.json
 │   └── state.schema.json
