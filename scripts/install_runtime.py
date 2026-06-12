@@ -33,9 +33,14 @@ def install_runtime(
     for item in manifest.copy_if_missing:
         source = root / item["from"]
         destination = target / item["to"]
+
+        if not source.is_file():
+            raise RuntimeError(f"Manifest source file does not exist: {item['from']}")
+
         if destination.exists():
             actions.append(f"skip existing {item['to']}")
             continue
+
         actions.append(f"copy {item['from']} -> {item['to']}")
         if not dry_run:
             destination.parent.mkdir(parents=True, exist_ok=True)

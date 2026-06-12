@@ -4,6 +4,31 @@ version: 0.1.0
 runtime_root: runtime
 
 copy_if_missing:
+  # Schemas
+  - from: schemas/objective.schema.json
+    to: runtime/schemas/objective.schema.json
+
+  - from: schemas/state.schema.json
+    to: runtime/schemas/state.schema.json
+
+  - from: schemas/current_iteration.schema.json
+    to: runtime/schemas/current_iteration.schema.json
+
+  - from: schemas/val_loss.schema.json
+    to: runtime/schemas/val_loss.schema.json
+
+  - from: schemas/timeline.schema.json
+    to: runtime/schemas/timeline.schema.json
+
+  - from: schemas/best.schema.json
+    to: runtime/schemas/best.schema.json
+
+  - from: schemas/experiment.schema.json
+    to: runtime/schemas/experiment.schema.json
+
+  - from: schemas/phase_b_agentteam_output.schema.json
+    to: runtime/schemas/phase_b_agentteam_output.schema.json
+
   # Objective
   - from: templates/nn_architecture/runtime/objective/objective.yaml
     to: runtime/objective/objective.yaml
@@ -40,8 +65,10 @@ ensure_dirs:
   - runtime/knowledge
   - runtime/debates
   - runtime/experiments
+  - runtime/schemas
 
 never_overwrite:
+  - runtime/schemas
   # User-owned objective
   - runtime/objective/objective.yaml
 
@@ -62,6 +89,14 @@ never_overwrite:
   - runtime/experiments
 
 runtime_required:
+  - runtime/schemas/objective.schema.json
+  - runtime/schemas/state.schema.json
+  - runtime/schemas/current_iteration.schema.json
+  - runtime/schemas/val_loss.schema.json
+  - runtime/schemas/timeline.schema.json
+  - runtime/schemas/best.schema.json
+  - runtime/schemas/experiment.schema.json
+  - runtime/schemas/phase_b_agentteam_output.schema.json
   - runtime/objective/objective.yaml
   - runtime/state/state.json
   - runtime/state/current_iteration.json
