@@ -167,16 +167,146 @@ the apply scripts can reject fabricated or premature output:
 - `runtime/knowledge/rejected_ideas.md`
 - `runtime/history/timeline.json`
 
-## Outputs
+## Outputs — STRICT machine-parsed contract (read this carefully)
 
-- Phase B: write the reconciliation, the four JSON sections (Candidate
-  Directions, Deduplicated Directions, Selected Direction, Modification Plan),
-  and the Agent Team Execution Log into `runtime/debates/<exp_name>.md`. The plan
-  is then applied to `runtime/state/current_iteration.json` by
-  `./scripts/apply_agentteam_plan.py` — not by you.
-- Phase F: write the reconciliation, the `## F1 Verdict` block, and the Agent
-  Team Execution Log into `runtime/debates/<exp_name>_f1_review.md`. The verdict
-  is then applied to runtime state by `./scripts/apply_f1_review.py` — not by you.
+The apply scripts (`apply_agentteam_plan.py`, `apply_f1_review.py`) parse your
+file with a regex that is NOT forgiving. If a single required heading or JSON
+block is missing or malformed, the whole apply FAILS and the loop blocks. Follow
+the contract below to the letter.
+
+### Where to write (filename — do NOT invent one)
+
+1. Read `runtime/state/current_iteration.json` and take `exp_name` from it.
+2. Phase B → write **`runtime/debates/<exp_name>.md`** (e.g.
+   `runtime/debates/exp_0001_exploration.md`). The phase script already created
+   this scaffold file with that exact name — OPEN AND FILL IT IN.
+3. Phase F1 → write **`runtime/debates/<exp_name>_f1_review.md`**.
+
+NEVER write to ad-hoc names like `iteration0.md` or `iteration-0.md`. The apply
+script only looks at `runtime/debates/<exp_name>.md`; any other filename is
+invisible to it.
+
+### How the parser works (so you respect it)
+
+- Sections are found by an EXACT level-2 heading: `^## <Heading>$`. The headings
+  below must appear **verbatim, in English, as `## ` (two hashes)** — not `###`,
+  not numbered (`## 1. ...`), not translated. You MAY add any extra prose/Chinese
+  sections around them; the parser ignores everything except these exact ones.
+- Inside a section the parser takes the first fenced ```json block that parses
+  AND matches the schema. Put exactly one ```json … ``` block per required
+  section, with valid JSON (double quotes, no trailing commas, no comments).
+- `historical_overlap_risk`, `expected_risk`, `risk` MUST be one of
+  `"low" | "medium" | "high"`.
+
+### Phase B — these five sections are MANDATORY
+
+```` markdown
+## Candidate Directions
+
+```json
+[
+  {
+    "source": "math-theorist",
+    "title": "<candidate title>",
+    "rationale": "<why this is worth trying, grounded in evidence>",
+    "implementation_hint": "<concrete code-level hint>",
+    "historical_overlap_risk": "low",
+    "expected_risk": "medium"
+  }
+]
+```
+
+## Deduplicated Directions
+
+```json
+[
+  {
+    "title": "<merged direction title>",
+    "merged_from": ["<candidate title A>", "<candidate title B>"],
+    "rationale": "<consolidated rationale>",
+    "implementation_hint": "<concrete hint>",
+    "historical_overlap_risk": "low",
+    "expected_risk": "medium"
+  }
+]
+```
+
+## Selected Direction
+
+```json
+{
+  "title": "<the ONE chosen direction — a real name, never the literal 'Selected Direction'>",
+  "rationale": "<why this one wins over the others>",
+  "expected_val_loss_effect": "<concrete expected effect on val_loss>",
+  "risk": "medium"
+}
+```
+
+## Modification Plan
+
+```json
+{
+  "status": "ready_for_implementation",
+  "selected_direction": "<same real title as Selected Direction.title>",
+  "implementation_scope": ["<step 1>", "<step 2>"],
+  "files_to_modify": ["project/nn-architecture/<file>.py"],
+  "local_validation_commands": ["<placeholder — apply overwrites this with the training command>"],
+  "notes": ["<any caveats / dissent>"]
+}
+```
+
+## Agent Team Execution Log
+
+<free prose is fine, but the text MUST mention every required agent name and the
+lifecycle tokens — see Required Execution Log Fields above. For Phase B the
+required names are: team-leader, math-theorist, numerical-debugger,
+flow-arch-reviewer, AND orthogonal-direction-scout (all five), plus the tokens
+60-second / poll, polling_cancelled, team_leader_finalized, and team_disbanded
+(or shutdown_request / TeamDelete).>
+````
+
+Hard rules for the B blocks:
+- `candidate_directions` and `deduplicated_directions` are JSON **arrays** with at
+  least one item each; every item needs ALL listed keys.
+- `Selected Direction` and `Modification Plan` are JSON **objects**.
+- `Modification Plan.status` must be the literal `"ready_for_implementation"`;
+  `implementation_scope` and `local_validation_commands` must be non-empty arrays;
+  `selected_direction` must equal the real chosen title (never the placeholder
+  string `"Selected Direction"`).
+- The Phase B Execution Log must name all FIVE agents (the four core + 
+  `orthogonal-direction-scout`), even when the current sub-step only used some of
+  them — `apply_agentteam_plan.py` checks for all five.
+
+### Phase F1 — these two sections are MANDATORY
+
+```` markdown
+## F1 Verdict
+
+```json
+{
+  "verdict": "learned",
+  "summary": "<one-paragraph evidence-grounded conclusion (not a placeholder)>",
+  "missing_evidence": ["<gap 1>"],
+  "agent_votes": [
+    {"agent": "math-theorist", "verdict": "learned", "rationale": "<...>"},
+    {"agent": "numerical-debugger", "verdict": "learned", "rationale": "<...>"},
+    {"agent": "flow-arch-reviewer", "verdict": "learned", "rationale": "<...>"}
+  ]
+}
+```
+
+## Agent Team Execution Log
+
+<must name team-leader, math-theorist, numerical-debugger, flow-arch-reviewer and
+the same lifecycle tokens as Phase B.>
+````
+
+- `verdict` must be exactly one of `"learned" | "rejected" | "inconclusive"`.
+- `summary` must be a real non-empty conclusion; `agent_votes` must be a list.
+
+After you write the file, the main turn applies it with
+`./scripts/apply_agentteam_plan.py` (Phase B) or `./scripts/apply_f1_review.py`
+(F1) — you do NOT run those, and you do NOT edit `runtime/state/**` yourself.
 
 ## Decision Rules
 
