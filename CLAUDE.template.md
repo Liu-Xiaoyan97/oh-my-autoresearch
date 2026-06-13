@@ -10,27 +10,29 @@ advance the loop by running:
 ```
 
 After any phase finishes, immediately inspect `runtime/state/state.json` and
-continue with `./scripts/run_loop.sh`. Do not stop mid-iteration (phases
-B/C/D/E/F). Run until the workflow returns to the **Phase A boundary** (Phase F
-completed — one full iteration), or until the state is `BLOCKED` or `DONE`.
+continue with `./scripts/run_loop.sh`. Do not stop after a single phase. Continue
+until the state is `BLOCKED` or `DONE`.
 
-Context management (the Stop hook stops at the Phase A boundary by default):
+Context management:
 
-- **Default — stop at the Phase A boundary.** At the boundary the session is
-  allowed to stop so the context can be compacted before the next iteration.
-  - Interactive CLI: `/compact` then `/loop` to start the next iteration with a
-    clean context (auto-compact may also engage now that control has returned).
-  - Unattended: run `./scripts/loop_forever.sh`, which starts each iteration in a
-    FRESH `claude` process — clean context, no `/compact` needed.
-  This is the reliable mode: Claude cannot self-invoke `/compact`, and Claude
-  Code **auto-compact does NOT fire during an unbroken hook-forced run**, so a
-  single continuous session can climb to 100% context without compacting.
-  Stopping at the boundary returns control to a point where compaction actually
-  happens. Because `runtime/` is the source of truth, resuming after a stop is
-  safe.
-- **Opt-in continuous**: set `AUTORESEARCH_CONTINUOUS=1` to run the whole A..F
-  loop in one session (stops only at `BLOCKED`/`DONE`). Only viable if
-  auto-compact reliably fires for your setup; otherwise context will overflow.
+- **Default — one continuous in-CLI session, bounded by auto-compact.** The whole
+  A..F loop runs in a single session and keeps going across iterations; it stops
+  only at `BLOCKED`/`DONE`. Claude Code auto-compact fires automatically when
+  context crosses the threshold and the loop continues afterward (runtime/ is the
+  source of truth, so a mid-loop compaction is safe). The default ~95%-of-1M
+  threshold is too high to ever fire usefully, so this deployment lowers it via
+  `env` in `.claude/settings.json`:
+  - `CLAUDE_CODE_AUTO_COMPACT_WINDOW` — effective window for the calc (e.g. 300000)
+  - `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` — percent of that window (e.g. 70)
+  → compaction triggers around `window × pct` tokens. **Env changes apply only to
+  NEW sessions — restart `claude` after editing.** (No hook can trigger
+  `/compact`; these env vars are the real lever.) Tune lower to compact more
+  often, higher to keep more context; `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` reverts
+  to a 200k window.
+- **Unattended driver / per-iteration fresh context**: run
+  `./scripts/loop_forever.sh`. It sets `AUTORESEARCH_STOP_AT_A=1` so the Stop hook
+  stops each session at the Phase A boundary and the driver starts the next
+  iteration in a fresh `claude` process (no compaction needed at all).
 
 Human intervention is required when the state is `BLOCKED`, when the state is
 `DONE`, or when a command fails in a way the workflow cannot repair.

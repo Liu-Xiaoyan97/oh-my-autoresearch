@@ -1,4 +1,8 @@
 {
+  "env": {
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "300000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "70"
+  },
   "hooks": {
     "PreToolUse": [
       {

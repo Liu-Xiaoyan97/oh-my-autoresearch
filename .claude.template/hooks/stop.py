@@ -10,25 +10,22 @@ from pathlib import Path
 # Phases that must keep running within the SAME session (the Stop hook blocks
 # stopping there and forces the loop to continue).
 #
-# DEFAULT = stop at the Phase A boundary (per-iteration). Phase F returns the
-# workflow to A; the session is then allowed to stop so the context can be
-# compacted before the next iteration:
-#   * interactive CLI: at the boundary, `/compact` then `/loop` (or auto-compact
-#     engages now that control has returned to the prompt);
-#   * unattended: scripts/loop_forever.sh starts each iteration in a FRESH
-#     `claude` process (clean context, no /compact needed).
-# This is the reliable mode: auto-compact does NOT fire during an unbroken
-# hook-forced run, so a single continuous session can grow to 100% without
-# compacting. Stopping at the boundary returns control to a point where
-# compaction actually happens. Because runtime/ is the source of truth, resuming
-# after a stop is safe.
+# DEFAULT = continuous in-CLI run: the whole A..F loop runs in ONE session and
+# keeps going across iterations; it stops only at BLOCKED or DONE. Context is
+# bounded by Claude Code auto-compact, which fires automatically once usage
+# crosses the threshold. NOTE: the default 95%-of-1M threshold is far too high
+# to ever fire usefully — this deployment lowers it via env in
+# .claude/settings.json (CLAUDE_CODE_AUTO_COMPACT_WINDOW + AUTOCOMPACT_PCT) so
+# compaction actually triggers mid-loop. (No hook can trigger /compact itself;
+# the threshold env vars are the real lever.)
 #
-# Opt-in continuous mode: set AUTORESEARCH_CONTINUOUS=1 to run the whole A..F
-# loop in one session (stops only at BLOCKED/DONE). Only viable if auto-compact
-# reliably fires for your setup.
+# Opt-in boundary mode: set AUTORESEARCH_STOP_AT_A=1 (scripts/loop_forever.sh
+# does this) to allow stopping at the Phase A boundary, so an external driver can
+# start each iteration in a fresh process. runtime/ is the source of truth, so
+# resuming after any stop/compaction is safe.
 CONTINUE_PHASES = {"B", "C", "D", "E", "F"}
-_CONTINUOUS = os.environ.get("AUTORESEARCH_CONTINUOUS") == "1"
-if _CONTINUOUS:
+_STOP_AT_A = os.environ.get("AUTORESEARCH_STOP_AT_A") == "1"
+if not _STOP_AT_A:
     CONTINUE_PHASES = CONTINUE_PHASES | {"A"}
 
 
@@ -49,26 +46,25 @@ def main() -> int:
     blocked = bool(state.get("blocked"))
 
     if phase in CONTINUE_PHASES and status == "running" and not blocked:
-        if _CONTINUOUS:
-            msg = (
-                f"AutoResearch is running (phase {phase}, continuous mode). "
-                "Continue with `./scripts/run_loop.sh` until runtime/state/state.json "
-                "reaches BLOCKED or DONE. Context is bounded only by Claude Code "
-                "auto-compact (ensure it is enabled via /config)."
-            )
-        else:
+        if _STOP_AT_A:
             msg = (
                 f"AutoResearch iteration in progress (phase {phase}). Continue "
                 "with `./scripts/run_loop.sh` until the workflow returns to the "
-                "Phase A boundary (one full iteration); then this session may stop "
-                "so the context can be compacted before the next iteration."
+                "Phase A boundary (one full iteration); then this session may stop."
+            )
+        else:
+            msg = (
+                f"AutoResearch is running (phase {phase}). Continue the loop with "
+                "`./scripts/run_loop.sh` until runtime/state/state.json reaches "
+                "BLOCKED or DONE. Context is bounded automatically by Claude Code "
+                "auto-compact (threshold configured in .claude/settings.json env)."
             )
         print(msg, file=sys.stderr)
         return 2
 
     # Not in a continue-phase -> allow the session to stop:
-    #   * the Phase A boundary (default mode),
-    #   * BLOCKED or DONE (always).
+    #   * BLOCKED or DONE (always),
+    #   * the Phase A boundary when AUTORESEARCH_STOP_AT_A=1.
     return 0
 
 
