@@ -39,9 +39,14 @@ returned a conclusion yet; after all required conclusions arrive it cancels that
 polling before writing.
 
 When `team-leader` signals `done`, shut the peers down
-(`SendMessage {type:"shutdown_request"}`) and `TeamDelete` BEFORE running
-`apply_f1_review.py` or `run_loop.sh`. The F1 team must never remain alive after
-its verdict has been applied.
+(`SendMessage {type:"shutdown_request"}`), ping-confirm each member has exited,
+then `TeamDelete` BEFORE running `apply_f1_review.py` or `run_loop.sh`.
+`TeamDelete` is metadata-only — it removes the team dirs but does NOT kill the
+agent processes (each is an independent `claude --agent-id <name>@<team>` under
+its own shell/pane). Skipping the shutdown+confirm step either makes `TeamDelete`
+fail (active members) or leaves orphan iTerm2 panes; after `TeamDelete`, sweep
+with `pgrep -fl -- '--agent-id'` and kill any stragglers. The F1 team must never
+remain alive after its verdict has been applied.
 
 ## Required Writes (by `team-leader`)
 

@@ -41,9 +41,14 @@ conclusion yet; after all required conclusions arrive it cancels that polling
 before writing.
 
 When `team-leader` signals `done`, shut the peers down
-(`SendMessage {type:"shutdown_request"}`) and `TeamDelete` BEFORE running
-`apply_agentteam_plan.py` or `run_loop.sh`. A previous B1/B2/B3 team must never
-remain alive when Phase C or the next B sub-step starts.
+(`SendMessage {type:"shutdown_request"}`), ping-confirm each member has exited,
+then `TeamDelete` BEFORE running `apply_agentteam_plan.py` or `run_loop.sh`.
+`TeamDelete` is metadata-only — it removes the team dirs but does NOT kill the
+agent processes (each is an independent `claude --agent-id <name>@<team>` under
+its own shell/pane). Skipping the shutdown+confirm step either makes `TeamDelete`
+fail (active members) or leaves orphan iTerm2 panes; after `TeamDelete`, sweep
+with `pgrep -fl -- '--agent-id'` and kill any stragglers. A previous B1/B2/B3
+team must never remain alive when Phase C or the next B sub-step starts.
 
 ## Required Writes (by `team-leader`)
 

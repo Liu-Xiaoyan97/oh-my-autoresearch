@@ -202,28 +202,140 @@ specialists send their full conclusions DIRECTLY to `team-leader` via
 sole writer — it consolidates/deduplicates and writes the debate file, then
 signals the orchestrator to disband.
 
+**关键约束：一个阶段只允许一个 team。** 每个 B1/B2/B3 步骤都必须创建新的
+team，但在同一时间内只能存在一个活跃的 team。在创建新 team 之前，必须
+先确认上一个 team 已完全清除（TeamDelete + shutdown）。
+
 Orchestration procedure (per team-leader step — B1, then B2, then B3):
 
-1. `TeamCreate` a team (e.g. `team_name: "phaseB-<exp_name>"`).
-2. Spawn the peers with the Agent tool, each with `team_name`, a `name`, and
+1. **检查 team 唯一性。** 在创建任何新 team 之前，确认没有活跃的 team 存在。
+   如果 `~/.claude/teams/` 目录下已有活跃的 team 配置，必须先清理干净
+   （发送 shutdown_request、TeamDelete）。
+
+2. `TeamCreate` a team (e.g. `team_name: "phaseB-<exp_name>"`).
+
+3. Spawn the peers with the Agent tool, each with `team_name`, a `name`, and
    `run_in_background: true` so their output does NOT return into the main turn:
    - `team-leader` (`subagent_type: team-leader`, `name: "team-leader"`) — tell
      it which specialists to wait for this step and to write the debate file
      once all their conclusions arrive, then `SendMessage` the orchestrator
-     `done: runtime/debates/<exp_name>.md`.
+     the signal `"任务完成，解散团队"`.
    - each required specialist (`subagent_type` = its name, same `name`) — tell it
-     to `SendMessage` its FULL conclusions to `team-leader` and to return only a
+     to `SendMessage` its FULL conclusions to `team-leader` with the
+     `[CONCLUSION] <agent-name>` format as the first line, and to return only a
      one-line ack to the orchestrator (no analysis content).
-3. Wait. The specialists DM `team-leader` directly; the main turn receives only
-   one-line acks and brief peer-DM summaries — never the debate content.
-4. If a required specialist has not returned, `team-leader` runs one-minute
-   response polling: every 60 seconds it sends `SendMessage` only to missing
-   specialists, records each query in the execution log, and keeps waiting.
-5. After every required specialist returns, `team-leader` cancels the polling
-   cron/check, finalizes, writes the debate file, and signals done.
-6. When `team-leader` signals done, the debate file is written. Shut the peers
-   down (`SendMessage {type:"shutdown_request"}`), then `TeamDelete`, before
-   running any apply script or advancing the phase.
+
+4. **创建主程序 cron 监控。** 在所有 peers 启动完毕后，立即创建一个 cron 任务
+   用于监控 team 进度。**Cron 的职责仅是监控和发信号，不执行 shutdown、
+   TeamDelete 或 phase 推进——这些由主程序在确认标记后负责。**
+   使用 `CronCreate`：
+   - `cron`: `1-59/2 * * * *`（每 2 分钟/120 秒，带偏移避免 :00/:30 拥堵）
+   - `recurring`: true
+   - 记录返回的 cron job ID（下文 prompt 中用 `<本cron_id>` 引用）。
+   - `prompt`：
+
+   ```
+   你是 Phase B AgentTeam 的监控 cron。**你的职责仅是监控和发信号，
+   不执行 shutdown、TeamDelete 或 phase 推进。这些由主程序负责。**
+
+   ## 阶段 0：快速退出（已完成）
+   1. 检查 `runtime/state/.cron_team_completed` 是否存在。
+      若存在 → 主程序尚未清理，team 已完成，无需监控。直接结束本次触发。
+
+   ## 阶段 1：阶段校验（Phase Validation）
+   1. 读取 `runtime/state/state.json`，记录当前 `phase`。
+   2. 列出 `~/.claude/teams/` 下所有 team 目录。
+   3. 确定当前阶段对应的预期 team 名称前缀：
+      - Phase B 的子步骤（B1/B2/B3）→ team 名称以 `phaseB` 开头
+      - Phase F1 → team 名称以 `phaseF1` 开头
+   4. 对于每个 team 目录：
+      - 若名称前缀不匹配当前阶段 → 陈旧 team
+      - 向陈旧 team 的**所有成员**发送 `SendMessage {type:"shutdown_request", reason:"阶段不匹配，清理陈旧 team"}`
+      - 执行 `TeamDelete`（若仍失败，记录并继续）
+   5. 简要记录清理结果。
+
+   ## 阶段 2：Agent 异常检测与恢复
+   1. 向 `team-leader` 发送进度查询：
+      `SendMessage` to `"team-leader"` 内容：
+      "请列出：(1) 已回传 [CONCLUSION] 的 agent 名称；
+       (2) 尚未回传的 required agent 名称；
+       (3) 你是否仍在等待。"
+   2. 等待 team-leader 回复（60 秒内）。分析回复：
+      a. team-leader 正常回复 → 进入阶段 3
+      b. team-leader 60 秒未回复 → team-leader 可能崩溃：
+         - 重新 spawn team-leader（相同 team_name、subagent_type、name）
+         - 告知新 team-leader 本阶段所需 specialists 列表及 debate 文件路径
+         - 本次结束，等待下次 cron 触发
+      c. team-leader 报告某 specialist 缺失 [CONCLUSION]：
+         - 重新 spawn 该 specialist（相同 name、subagent_type、team_name），
+           告知其重新发送 [CONCLUSION] 到 team-leader
+         - 本次结束
+
+   ## 阶段 3：完成检测——只发信号，不做清理！
+   1. 若 team-leader 回复了 "任务完成，解散团队" 信号：
+      **只创建标记文件，不做清理！**
+      用 Write 工具创建 `runtime/state/.cron_team_completed`
+      （内容为 team-leader 的完成消息原文）。
+
+   2. 若 team-leader 未完成，检查总耗时：
+      - 若从 team 创建至今超过 30 分钟（超时）：
+        用 Write 工具创建 `runtime/state/.cron_team_completed`
+        （内容为 "TIMEOUT: 超过 30 分钟"）
+      - 否则：本次结束，等待下次 cron 触发
+   ```
+
+5. **主程序只与 team-leader 通讯。** 主程序（编排者）在任何时候都**不得**直接
+   向 team 中的其他 agent（math-theorist、numerical-debugger、flow-arch-reviewer、
+   orthogonal-direction-scout）发送消息或接收其分析内容。所有 team 内部通讯
+   仅发生在 team-leader 与各 specialist 之间。主程序的 cron 监控执行上述
+   增强 prompt——由 cron 自行查询 team-leader 和重启 agent，主程序不参与。
+
+6. **`team-leader` 内部机制。** `team-leader` 在启动时创建自己的 60 秒轮询
+   cron（使用 `CronCreate`），在 cron 触发时检查缺失的 specialist 并发送
+   提醒。所有 specialist 回传 `[CONCLUSION]` 后，`team-leader` 取消轮询 cron
+   （`CronDelete`），整理写入 debate 文件，然后向主程序发送
+   `"任务完成，解散团队"`。
+
+7. **主程序在每轮检查标记并执行清理。** 由于 stop hook 不再豁免主程序
+   （phase=B 会阻止退出），主程序会持续循环。每次进入 Phase B 的 turn 中，
+   主程序必须：
+
+   1. 检查 `runtime/state/.cron_team_completed` 是否存在
+
+   2. **若标记存在** → team 已完成（正常或超时）：
+      a. 读取标记文件内容，判断是正常完成还是 TIMEOUT
+      b. **向所有 team 成员发送 `shutdown_request`**
+      c. **确认所有成员已退出**：向每个成员发送简短 ping
+         （`SendMessage` 内容为 "."），已退出的 agent 会返回错误。
+         对仍在运行的 agent，等待 5-10 秒后重试，最多重试 3 轮（约 30 秒）
+      d. 执行 `TeamDelete`
+      d2. **进程兜底扫描**：`TeamDelete` 只删元数据，本身不杀进程。删完后运行
+          `pgrep -fl -- '--agent-id'`（或
+          `ps aux | grep -- '--agent-id' | grep '@<team_name>'`）确认没有残留
+          的 agent 进程；若仍有，按 pid 逐个 `kill` 后再继续。
+      e. 删除 `runtime/state/.cron_team_completed`
+      f. 若正常完成：运行 `./scripts/apply_agentteam_plan.py --advance`
+         若超时：运行 `./scripts/set_phase.sh BLOCKED C1`，
+         block_reason="AgentTeam 超时：30 分钟内未完成"
+      g. 运行 `./scripts/run_loop.sh`
+
+   3. **若标记不存在** → team 仍在进行中：
+      a. 检查 cron 是否仍在活跃（`CronList`）
+      b. 若 cron 不存在或已失效 → 重新创建 cron（同步骤 4）
+      c. 若 cron 存在 → **不做任何操作，直接结束本 turn。**
+         Cron 每 2 分钟自行查询 team-leader 进度，主程序无需重复查询。
+
+> **为什么必须先 shutdown_request + ping 确认，再 TeamDelete（拆除语义）。**
+> `TeamDelete` 是**纯元数据操作**：它只删除 `~/.claude/teams/<team>/` 与
+> `~/.claude/tasks/<team>/`，并清掉当前会话里的 team 上下文。它**不会**终止任何
+> agent 进程。每个后台 agent 都是一个**独立的 `claude` 进程**
+> （`claude ... --agent-id <name>@<team>`），其 OS 父进程是它自己所在的 shell /
+> iTerm2 分屏 pane，而非编排者；`--parent-session-id` 只是逻辑链接。因此只有
+> **被批准的 `shutdown_request`**（或直接 kill / 关闭 pane）才能真正结束它。
+> 若跳过 c 步直接 `TeamDelete`：(1) 团队若仍有活跃成员，`TeamDelete` 会**失败**；
+> (2) 即便删掉了元数据，残留的 agent 进程仍会以"孤儿"形式留在 iTerm2 里——可被
+> 方向键导航进入、pane 不关闭。这正是先 ping 确认每个成员退出、再 `TeamDelete`、
+> 最后 `pgrep` 兜底扫描的原因。
 
 Required specialists per step:
 
@@ -301,20 +413,23 @@ Compare current experiment results against `runtime/experiments/best.json`.
 - `phase_f_checkpoint.sh` updates `runtime/experiments/best.json` if the primary
   metric improved.
 - Run F1 AgentTeam root cause analysis as a FLAT PEER TEAM (same topology as
-  Phase B): the orchestrator `TeamCreate`s a team (e.g. `phaseF1-<exp_name>`) and
-  spawns `team-leader` together with the read-only specialists `math-theorist`,
-  `numerical-debugger`, and `flow-arch-reviewer` as PEERS, in the background. The
-  specialists `SendMessage` their full conclusions DIRECTLY to `team-leader`
-  (never into the main turn); `team-leader` reconciles, classifies the verdict,
-  waits for all required F1 specialists, writes the review, then `SendMessage`s
-  the orchestrator `done: runtime/debates/<exp_name>_f1_review.md`. The
-  orchestrator then shuts the peers down and `TeamDelete`s. No agent spawns
-  another agent (no nesting); `team-leader` must not spawn the specialists. If a
-  conclusion is missing, `team-leader` re-requests it by name every 60 seconds,
-  records each query in the execution log, and keeps waiting — never fabricate.
-  After all required conclusions arrive, `team-leader` cancels the polling
-  cron/check, writes the review, and signals done. The orchestrator must shut
-  down and `TeamDelete` the F1 team before running `apply_f1_review.py`.
+  Phase B): the orchestrator uses the **same protocols as Phase B**（包括
+  增强版 cron prompt 中的阶段校验、Agent 异常恢复、完成检测三步流程，
+  cron 只发信号不清理，主程序负责 shutdown + confirm + TeamDelete）：
+  1. **检查 team 唯一性**（一个阶段只有一个 team）
+  2. `TeamCreate` a team (e.g. `phaseF1-<exp_name>`)
+  3. Spawn `team-leader` together with the read-only specialists
+     `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` as PEERS,
+     in the background. Specialists `SendMessage` `[CONCLUSION]` to
+     `team-leader`; main turn only receives one-line acks.
+  4. **创建主程序 cron 监控**（使用与 Phase B 相同的增强 prompt 模板，
+     包含阶段校验 + Agent 异常恢复 + 完成检测三阶段。注意：F1 的
+     apply 脚本是 `./scripts/apply_f1_review.py` 而非
+     `--advance`；标记文件同为 `runtime/state/.cron_team_completed`）
+  5. **主程序只与 team-leader 通讯**，不直接联系其他 agent。
+  6. **主程序检查 `.cron_team_completed` 标记** → 确认所有成员退出 →
+     TeamDelete → 运行 `./scripts/apply_f1_review.py` →
+     `./scripts/run_loop.sh`。
 - `team-leader` writes the review (the `## F1 Verdict` block and an Agent Team
   Execution Log) to `runtime/debates/<exp_name>_f1_review.md`. Then apply it:
 
