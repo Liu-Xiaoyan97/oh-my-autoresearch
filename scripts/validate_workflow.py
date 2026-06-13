@@ -232,6 +232,13 @@ def validate_agentteam(value: Any, path: Path, errors: list[str]) -> None:
     if b1:
         _validate_agentteam_status(b1, "agentteam.b1_candidate_review", path, errors)
         _validate_exact_agents(b1.get("agents"), B1_B3_F1_AGENTS, "agentteam.b1_candidate_review.agents", path, errors)
+        _validate_team_lifecycle(
+            b1,
+            B1_B3_F1_AGENTS,
+            "agentteam.b1_candidate_review",
+            path,
+            errors,
+        )
         if not isinstance(b1.get("candidate_count"), int) or b1.get("candidate_count", -1) < 0:
             errors.append(f"{path} agentteam.b1_candidate_review.candidate_count must be a non-negative integer")
         if not isinstance(b1.get("blocking_issues"), list):
@@ -243,6 +250,13 @@ def validate_agentteam(value: Any, path: Path, errors: list[str]) -> None:
         if b2.get("agent") != B2_AGENT:
             errors.append(f"{path} agentteam.b2_orthogonality_review.agent must be {B2_AGENT}")
         _validate_exact_agents(b2.get("agents"), B2_AGENTS, "agentteam.b2_orthogonality_review.agents", path, errors)
+        _validate_team_lifecycle(
+            b2,
+            B2_AGENTS,
+            "agentteam.b2_orthogonality_review",
+            path,
+            errors,
+        )
         for key in ["accepted_candidates", "rejected_candidates"]:
             if not isinstance(b2.get(key), list):
                 errors.append(f"{path} agentteam.b2_orthogonality_review.{key} must be a list")
@@ -251,6 +265,13 @@ def validate_agentteam(value: Any, path: Path, errors: list[str]) -> None:
     if b3:
         _validate_agentteam_status(b3, "agentteam.b3_plan_selection", path, errors)
         _validate_exact_agents(b3.get("agents"), B1_B3_F1_AGENTS, "agentteam.b3_plan_selection.agents", path, errors)
+        _validate_team_lifecycle(
+            b3,
+            B1_B3_F1_AGENTS,
+            "agentteam.b3_plan_selection",
+            path,
+            errors,
+        )
         for key in ["implementation_risks", "diagnostic_requirements"]:
             if not isinstance(b3.get(key), list):
                 errors.append(f"{path} agentteam.b3_plan_selection.{key} must be a list")
@@ -259,6 +280,13 @@ def validate_agentteam(value: Any, path: Path, errors: list[str]) -> None:
     if f1:
         _validate_agentteam_status(f1, "agentteam.f1_evidence_review", path, errors)
         _validate_exact_agents(f1.get("agents"), B1_B3_F1_AGENTS, "agentteam.f1_evidence_review.agents", path, errors)
+        _validate_team_lifecycle(
+            f1,
+            B1_B3_F1_AGENTS,
+            "agentteam.f1_evidence_review",
+            path,
+            errors,
+        )
         if f1.get("verdict") not in {"learned", "rejected", "inconclusive", None}:
             errors.append(f"{path} agentteam.f1_evidence_review.verdict must be learned, rejected, inconclusive, or null")
         if not isinstance(f1.get("missing_evidence"), list):
@@ -283,6 +311,40 @@ def _validate_agentteam_status(data: dict[str, Any], prefix: str, path: Path, er
 def _validate_exact_agents(value: Any, expected: list[str], prefix: str, path: Path, errors: list[str]) -> None:
     if value != expected:
         errors.append(f"{path} {prefix} must be exactly {expected}")
+
+
+def _validate_team_lifecycle(
+    data: dict[str, Any],
+    expected_agents: list[str],
+    prefix: str,
+    path: Path,
+    errors: list[str],
+) -> None:
+    lifecycle = data.get("team_lifecycle")
+    if not isinstance(lifecycle, dict):
+        errors.append(f"{path} {prefix}.team_lifecycle must be an object")
+        return
+
+    if lifecycle.get("required_agents") != expected_agents:
+        errors.append(f"{path} {prefix}.team_lifecycle.required_agents must be exactly {expected_agents}")
+
+    completed_agents = lifecycle.get("completed_agents")
+    if not isinstance(completed_agents, list):
+        errors.append(f"{path} {prefix}.team_lifecycle.completed_agents must be a list")
+
+    if data.get("status") != "complete":
+        return
+
+    if completed_agents != expected_agents:
+        errors.append(f"{path} {prefix}.team_lifecycle.completed_agents must be exactly {expected_agents} when status is complete")
+    if lifecycle.get("all_agents_completed") is not True:
+        errors.append(f"{path} {prefix}.team_lifecycle.all_agents_completed must be true when status is complete")
+    if lifecycle.get("team_leader_finalized") is not True:
+        errors.append(f"{path} {prefix}.team_lifecycle.team_leader_finalized must be true when status is complete")
+    if lifecycle.get("team_disbanded") is not True:
+        errors.append(f"{path} {prefix}.team_lifecycle.team_disbanded must be true when status is complete")
+    if not isinstance(lifecycle.get("disbanded_at"), str) or not lifecycle.get("disbanded_at"):
+        errors.append(f"{path} {prefix}.team_lifecycle.disbanded_at must be a non-empty string when status is complete")
 
 
 def validate_val_loss(root: Path, errors: list[str]) -> dict[str, Any]:

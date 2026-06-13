@@ -47,7 +47,7 @@
       "properties": {
         "b1_candidate_review": {
           "type": "object",
-          "required": ["status", "agents", "summary", "candidate_count", "blocking_issues"],
+          "required": ["status", "agents", "team_lifecycle", "summary", "candidate_count", "blocking_issues"],
           "properties": {
             "status": {
               "type": "string",
@@ -56,6 +56,9 @@
             "agents": {
               "type": "array",
               "const": ["team-leader", "math-theorist", "numerical-debugger", "flow-arch-reviewer"]
+            },
+            "team_lifecycle": {
+              "$ref": "#/$defs/b1_b3_f1_team_lifecycle"
             },
             "summary": {
               "type": ["string", "null"]
@@ -71,7 +74,7 @@
         },
         "b2_orthogonality_review": {
           "type": "object",
-          "required": ["status", "agent", "agents", "summary", "accepted_candidates", "rejected_candidates", "override_reason"],
+          "required": ["status", "agent", "agents", "team_lifecycle", "summary", "accepted_candidates", "rejected_candidates", "override_reason"],
           "properties": {
             "status": {
               "type": "string",
@@ -84,6 +87,9 @@
             "agents": {
               "type": "array",
               "const": ["team-leader", "orthogonal-direction-scout"]
+            },
+            "team_lifecycle": {
+              "$ref": "#/$defs/b2_team_lifecycle"
             },
             "summary": {
               "type": ["string", "null"]
@@ -104,6 +110,7 @@
           "required": [
             "status",
             "agents",
+            "team_lifecycle",
             "selected_candidate",
             "summary",
             "implementation_risks",
@@ -117,6 +124,9 @@
             "agents": {
               "type": "array",
               "const": ["team-leader", "math-theorist", "numerical-debugger", "flow-arch-reviewer"]
+            },
+            "team_lifecycle": {
+              "$ref": "#/$defs/b1_b3_f1_team_lifecycle"
             },
             "selected_candidate": {
               "type": ["string", "null"]
@@ -134,7 +144,7 @@
         },
         "f1_evidence_review": {
           "type": "object",
-          "required": ["status", "agents", "summary", "verdict", "missing_evidence"],
+          "required": ["status", "agents", "team_lifecycle", "summary", "verdict", "missing_evidence"],
           "properties": {
             "status": {
               "type": "string",
@@ -143,6 +153,9 @@
             "agents": {
               "type": "array",
               "const": ["team-leader", "math-theorist", "numerical-debugger", "flow-arch-reviewer"]
+            },
+            "team_lifecycle": {
+              "$ref": "#/$defs/b1_b3_f1_team_lifecycle"
             },
             "summary": {
               "type": ["string", "null"]
@@ -258,6 +271,94 @@
     },
     "updated_at": {
       "type": ["string", "null"]
+    }
+  },
+  "$defs": {
+    "b1_b3_f1_team_lifecycle": {
+      "type": "object",
+      "required": [
+        "required_agents",
+        "completed_agents",
+        "all_agents_completed",
+        "team_leader_finalized",
+        "team_disbanded",
+        "disbanded_at",
+        "notes"
+      ],
+      "properties": {
+        "required_agents": {
+          "type": "array",
+          "const": ["team-leader", "math-theorist", "numerical-debugger", "flow-arch-reviewer"]
+        },
+        "completed_agents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "all_agents_completed": {
+          "type": "boolean"
+        },
+        "team_leader_finalized": {
+          "type": "boolean"
+        },
+        "team_disbanded": {
+          "type": "boolean"
+        },
+        "disbanded_at": {
+          "type": ["string", "null"]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "b2_team_lifecycle": {
+      "type": "object",
+      "required": [
+        "required_agents",
+        "completed_agents",
+        "all_agents_completed",
+        "team_leader_finalized",
+        "team_disbanded",
+        "disbanded_at",
+        "notes"
+      ],
+      "properties": {
+        "required_agents": {
+          "type": "array",
+          "const": ["team-leader", "orthogonal-direction-scout"]
+        },
+        "completed_agents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "all_agents_completed": {
+          "type": "boolean"
+        },
+        "team_leader_finalized": {
+          "type": "boolean"
+        },
+        "team_disbanded": {
+          "type": "boolean"
+        },
+        "disbanded_at": {
+          "type": ["string", "null"]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

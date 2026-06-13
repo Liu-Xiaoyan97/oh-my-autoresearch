@@ -9,11 +9,13 @@ Steps:
 3. Run:
 
    ```bash
+   cd /Users/liuxiaoyan/workspace/research-runtime
    ./scripts/run_loop.sh
    ```
 
 4. If the workflow is still in phase `A`, `B`, `C`, `D`, `E`, or `F` with
-   `workflow_status=running`, run `./scripts/run_loop.sh` again.
+   `workflow_status=running`, stay in `/Users/liuxiaoyan/workspace/research-runtime`
+   and run `./scripts/run_loop.sh` again.
 5. Stop only when `runtime/state/state.json` reaches `BLOCKED` or `DONE`, or
    when a command fails and the workflow itself cannot recover.
 

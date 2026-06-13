@@ -5,6 +5,7 @@ Bootstrap or repair the runtime workspace from `oh-my-autoresearch`.
 Run:
 
 ```bash
+cd /Users/liuxiaoyan/workspace/research-runtime
 ./scripts/sync_from_workflow.sh
 ./scripts/validate_runtime.sh
 ./scripts/validate_schema.sh

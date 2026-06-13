@@ -47,6 +47,9 @@ copy_if_missing:
   - from: agents/orthogonal-direction-scout.md
     to: .claude/agents/orthogonal-direction-scout.md
 
+  - from: agents/coder.md
+    to: .claude/agents/coder.md
+
   - from: .claude.template/hooks/pre_tool_use.py
     to: .claude/hooks/pre_tool_use.py
 
@@ -165,8 +168,11 @@ runtime_required:
   - .claude/agents/numerical-debugger.md
   - .claude/agents/flow-arch-reviewer.md
   - .claude/agents/orthogonal-direction-scout.md
+  - .claude/agents/coder.md
   - .claude/commands/loop.md
   - .claude/hooks/validate_state.py
+  - .claude/hooks/pre_tool_use.py
+  - .claude/hooks/post_tool_use.py
   - runtime/schemas/objective.schema.json
   - runtime/schemas/state.schema.json
   - runtime/schemas/current_iteration.schema.json

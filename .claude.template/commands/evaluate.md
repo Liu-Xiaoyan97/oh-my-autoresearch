@@ -13,33 +13,51 @@ Run Phase F1 AgentTeam evidence review for the active experiment.
 - `runtime/knowledge/rejected_ideas.md`
 - `runtime/history/timeline.json`
 
-## AgentTeam Flow
+## AgentTeam Flow (FLAT — no nesting)
 
-Use project agents from `.claude/agents/`.
+Use project agents from `.claude/agents/`. You (the main turn) are the
+orchestrator: invoke the READ-ONLY specialists DIRECTLY and IN PARALLEL, collect
+their returned conclusions, then invoke `team-leader` (the sole writer). Do NOT
+invoke `team-leader` first and let it spawn the specialists — that nesting is
+forbidden.
 
-Ask `team-leader`, `math-theorist`, `numerical-debugger`, and
-`flow-arch-reviewer` to review the completed experiment:
+1. Invoke `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` in parallel
+   to review the completed experiment:
+   - mathematical hypothesis support or contradiction;
+   - numerical reliability and implementation pathologies;
+   - architecture-level lesson and actionability.
+2. Hand their conclusions to `team-leader`, which reconciles, classifies the
+   verdict (`learned` / `rejected` / `inconclusive`), waits for all required F1
+   agents, finalizes, and disbands the F1 team. `team-leader` does not spawn
+   agents.
 
-- team-leader reconciliation and schema-complete runtime write;
-- mathematical hypothesis support or contradiction;
-- numerical reliability and implementation pathologies;
-- architecture-level lesson and actionability.
+If an agent is slow or its output is missing, WAIT and re-invoke — do not
+fabricate the verdict.
 
-## Required Writes
+## Required Writes (by `team-leader`)
 
-- Update `runtime/state/current_iteration.json`:
-  - `root_cause_analysis.status`
-  - `root_cause_analysis.agent_votes`
-  - `root_cause_analysis.verdict`
-  - `root_cause_analysis.summary`
-  - `agentteam.f1_evidence_review`
-- Append a timeline event to `runtime/history/timeline.json`.
-- If verdict is `learned`, append to `runtime/knowledge/learned_patterns.md`.
-- If verdict is `rejected`, append to `runtime/knowledge/rejected_ideas.md`.
-- If verdict is `inconclusive`, record missing evidence and do not force a learned/rejected update.
+`team-leader` writes the review to `runtime/debates/<exp_name>_f1_review.md`: the
+`## F1 Verdict` JSON block (verdict, summary, missing_evidence, agent_votes) and
+an `## Agent Team Execution Log` naming every required agent.
+
+## Apply (by the main turn)
+
+```bash
+cd /Users/liuxiaoyan/workspace/research-runtime
+./scripts/apply_f1_review.py
+./scripts/run_loop.sh
+```
+
+`apply_f1_review.py` writes `root_cause_analysis` and
+`agentteam.f1_evidence_review` into `current_iteration.json` and appends the
+timeline event. `phase_f_checkpoint.sh` then writes the checkpoint: `learned`
+appends to `runtime/knowledge/learned_patterns.md`, `rejected` to
+`runtime/knowledge/rejected_ideas.md`, `inconclusive` records missing evidence.
+Do not write any of these by hand.
 
 ## Guardrails
 
 - Do not rerun or reinterpret training without recorded evidence.
 - Do not overwrite experiment records.
-- Do not update `best.json` unless the primary metric improved according to `runtime/state/val_loss.json`.
+- `best.json` is updated by `phase_f_checkpoint.sh` only when the primary metric
+  improved according to `runtime/state/val_loss.json`.

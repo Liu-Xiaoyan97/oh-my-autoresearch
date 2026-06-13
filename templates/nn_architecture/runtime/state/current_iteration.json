@@ -16,6 +16,20 @@
         "numerical-debugger",
         "flow-arch-reviewer"
       ],
+      "team_lifecycle": {
+        "required_agents": [
+          "team-leader",
+          "math-theorist",
+          "numerical-debugger",
+          "flow-arch-reviewer"
+        ],
+        "completed_agents": [],
+        "all_agents_completed": false,
+        "team_leader_finalized": false,
+        "team_disbanded": false,
+        "disbanded_at": null,
+        "notes": []
+      },
       "summary": null,
       "candidate_count": 0,
       "blocking_issues": []
@@ -27,6 +41,18 @@
         "team-leader",
         "orthogonal-direction-scout"
       ],
+      "team_lifecycle": {
+        "required_agents": [
+          "team-leader",
+          "orthogonal-direction-scout"
+        ],
+        "completed_agents": [],
+        "all_agents_completed": false,
+        "team_leader_finalized": false,
+        "team_disbanded": false,
+        "disbanded_at": null,
+        "notes": []
+      },
       "summary": null,
       "accepted_candidates": [],
       "rejected_candidates": [],
@@ -40,6 +66,20 @@
         "numerical-debugger",
         "flow-arch-reviewer"
       ],
+      "team_lifecycle": {
+        "required_agents": [
+          "team-leader",
+          "math-theorist",
+          "numerical-debugger",
+          "flow-arch-reviewer"
+        ],
+        "completed_agents": [],
+        "all_agents_completed": false,
+        "team_leader_finalized": false,
+        "team_disbanded": false,
+        "disbanded_at": null,
+        "notes": []
+      },
       "selected_candidate": null,
       "summary": null,
       "implementation_risks": [],
@@ -53,6 +93,20 @@
         "numerical-debugger",
         "flow-arch-reviewer"
       ],
+      "team_lifecycle": {
+        "required_agents": [
+          "team-leader",
+          "math-theorist",
+          "numerical-debugger",
+          "flow-arch-reviewer"
+        ],
+        "completed_agents": [],
+        "all_agents_completed": false,
+        "team_leader_finalized": false,
+        "team_disbanded": false,
+        "disbanded_at": null,
+        "notes": []
+      },
       "summary": null,
       "verdict": null,
       "missing_evidence": []
