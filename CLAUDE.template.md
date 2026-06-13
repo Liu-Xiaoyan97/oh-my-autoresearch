@@ -10,11 +10,24 @@ advance the loop by running:
 ```
 
 After any phase finishes, immediately inspect `runtime/state/state.json` and
-continue with `./scripts/run_loop.sh` until the workflow reaches `BLOCKED` or
-`DONE`. Do not stop after a single phase just because the phase completed.
-Human intervention is required only when the workflow state is `BLOCKED`, when
-the state is `DONE`, or when a command fails in a way the workflow cannot
-repair.
+continue with `./scripts/run_loop.sh`. Do not stop after a single phase just
+because the phase completed.
+
+Run until you reach the **Phase A boundary** — i.e. Phase F has completed and
+the workflow has returned to Phase A (one full iteration) — or until the state
+is `BLOCKED` or `DONE`. At the Phase A boundary the session is allowed to stop
+(the Stop hook permits it) so the context can be compacted before the next
+iteration. Because `runtime/` is the source of truth, a fresh session resumes
+the loop correctly.
+
+- **Unattended runs**: use `./scripts/loop_forever.sh`, which runs one iteration
+  per fresh `claude` session (clean context each iteration — no manual
+  `/compact` needed) until `DONE`/`BLOCKED`.
+- **Interactive runs**: at the Phase A boundary, `/compact` then `/loop` to
+  continue the next iteration.
+
+Human intervention is required when the state is `BLOCKED`, when the state is
+`DONE`, or when a command fails in a way the workflow cannot repair.
 
 You MUST treat `runtime/` as the source of truth.
 

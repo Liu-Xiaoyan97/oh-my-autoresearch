@@ -137,6 +137,8 @@ copy_if_missing:
     to: scripts/doctor.sh
   - from: scripts/runtime/list_experiments.sh
     to: scripts/list_experiments.sh
+  - from: scripts/runtime/loop_forever.sh
+    to: scripts/loop_forever.sh
   - from: scripts/runtime/reset_current_iteration.sh
     to: scripts/reset_current_iteration.sh
   - from: scripts/runtime/reset_runtime.sh

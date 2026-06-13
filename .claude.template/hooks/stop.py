@@ -6,7 +6,13 @@ import sys
 from pathlib import Path
 
 
-ACTIVE_PHASES = {"A", "B", "C", "D", "E", "F"}
+# Phases that must keep running within the SAME session. Phase A is intentionally
+# excluded: it is the per-iteration boundary (Phase F returns the workflow to A).
+# Allowing the session to stop there lets the context be compacted, or a fresh
+# session (e.g. scripts/loop_forever.sh) start the next iteration with a clean
+# context. Because runtime/ is the source of truth, resuming after a stop is
+# safe. BLOCKED and DONE always allow stopping.
+CONTINUE_PHASES = {"B", "C", "D", "E", "F"}
 
 
 def main() -> int:
@@ -25,15 +31,19 @@ def main() -> int:
     status = state.get("workflow_status")
     blocked = bool(state.get("blocked"))
 
-    if phase in ACTIVE_PHASES and status == "running" and not blocked:
+    if phase in CONTINUE_PHASES and status == "running" and not blocked:
         print(
-            "AutoResearch is still running. Continue the loop with "
-            "`./scripts/run_loop.sh` until runtime/state/state.json reaches "
-            "BLOCKED or DONE.",
+            f"AutoResearch iteration in progress (phase {phase}). Continue with "
+            "`./scripts/run_loop.sh` until the workflow returns to the Phase A "
+            "boundary (one full iteration), then this session may stop so the "
+            "context can be compacted before the next iteration.",
             file=sys.stderr,
         )
         return 2
 
+    # phase == A (iteration boundary), BLOCKED, or DONE -> allow the session to
+    # stop. At the A boundary: /compact then /loop to continue, or let
+    # scripts/loop_forever.sh start the next iteration in a fresh session.
     return 0
 
 
