@@ -30,6 +30,27 @@ if not _STOP_AT_A:
 
 
 def main() -> int:
+    # ---- subagent detection ----
+    # Subagents (team members) must always be allowed to stop — the orchestrator
+    # sends them shutdown_request, and they must obey. Only the main turn should
+    # be forced to continue the loop.
+    #
+    # Detection: read stdin JSON (same mechanism as pre_tool_use.py). The Stop
+    # hook payload includes "agent_type" for subagents and omits it (None) for
+    # the main Claude turn. If agent_type is present and non-null, this is a
+    # subagent — allow stopping unconditionally.
+    try:
+        raw = sys.stdin.read()
+        if raw.strip():
+            payload = json.loads(raw)
+            agent_type = payload.get("agent_type")
+            if agent_type is not None:
+                # Running as a subagent → always allow stop
+                return 0
+    except (json.JSONDecodeError, Exception):
+        pass
+    # ---- end subagent detection ----
+
     root = Path(__file__).resolve().parents[2]
     state_path = root / "runtime/state/state.json"
     if not state_path.exists():
