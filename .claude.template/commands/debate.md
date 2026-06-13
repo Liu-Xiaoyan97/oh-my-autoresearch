@@ -13,32 +13,38 @@ Run Phase B AgentTeam debate for the active iteration.
 - `runtime/knowledge/rejected_ideas.md`
 - `runtime/history/timeline.json`
 
-## AgentTeam Flow (FLAT — no nesting)
+## AgentTeam Flow (FLAT PEER TEAM — no nesting)
 
 Use project agents from `.claude/agents/`. You (the main turn) are the
-orchestrator: invoke the READ-ONLY specialists DIRECTLY and IN PARALLEL, collect
-their returned conclusions, then invoke `team-leader` (the sole writer) with
-those conclusions. Do NOT invoke `team-leader` first and let it spawn the
-specialists — that nesting is forbidden, and `team-leader` has no agent-spawning
-tool.
+orchestrator: `TeamCreate` one team and spawn `team-leader` TOGETHER WITH the
+read-only specialists as PEERS (`run_in_background: true`). The specialists
+`SendMessage` their full conclusions DIRECTLY to `team-leader` — never back to
+you; the debate content must not enter the main turn. `team-leader` (the sole
+writer) consolidates and writes. No agent spawns another agent (no nesting):
+`team-leader` has no agent-spawning tool, and you do not route specialist
+content through yourself.
 
-1. B1: invoke `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` in
-   parallel to generate/stress-test candidates → hand their conclusions to
-   `team-leader`, which consolidates and deduplicates.
-2. B2: invoke `orthogonal-direction-scout` to reject duplicates and confirm
-   orthogonality → hand its conclusion to `team-leader`.
-3. B3: invoke `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` in
-   parallel to debate survivors → `team-leader` reconciles and confirms one plan.
+1. B1: spawn `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` as peers
+   to generate/stress-test candidates → they DM `team-leader`, which consolidates
+   and deduplicates.
+2. B2: spawn `orthogonal-direction-scout` as a peer to reject duplicates and
+   confirm orthogonality → it DMs `team-leader`.
+3. B3: spawn `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` as peers
+   to debate survivors → they DM `team-leader`, which reconciles and confirms one
+   plan.
 
-The specialists are read-only and only return conclusions. If an agent is slow
-or its output does not exist yet, WAIT and re-invoke it — do not fabricate.
+The specialists are read-only and only DM their conclusions to `team-leader`. If
+a conclusion does not exist yet, `team-leader` WAITS and re-requests it by name —
+do not fabricate. When `team-leader` signals `done`, shut the peers down
+(`SendMessage {type:"shutdown_request"}`) and `TeamDelete`.
 
 ## Required Writes (by `team-leader`)
 
-`team-leader` waits for every required agent, finalizes, disbands the team, and
-writes the consolidated debate to `runtime/debates/<exp_name>.md`: the four JSON
-sections (Candidate Directions, Deduplicated Directions, Selected Direction,
-Modification Plan) and an `## Agent Team Execution Log` naming every agent.
+`team-leader` waits for every required peer's conclusion, finalizes, signals the
+orchestrator to disband, and writes the consolidated debate to
+`runtime/debates/<exp_name>.md`: the four JSON sections (Candidate Directions,
+Deduplicated Directions, Selected Direction, Modification Plan) and an
+`## Agent Team Execution Log` naming every agent.
 
 ## Apply and Advance (by the main turn)
 

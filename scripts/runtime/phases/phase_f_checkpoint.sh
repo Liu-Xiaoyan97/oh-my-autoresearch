@@ -298,16 +298,19 @@ evidence review before Phase F writes checkpoints or learned/rejected knowledge.
 The main Claude turn must not manually replace this review. Invoke the named
 project agents and record their outputs before writing the F1 verdict.
 
-## Required Project Agents (FLAT — no nesting)
+## Required Project Agents (FLAT PEER TEAM — no nesting)
 
-The orchestrator (main turn) invokes the specialists DIRECTLY and IN PARALLEL,
-then invokes `team-leader` only to reconcile. Do NOT invoke `team-leader` first
-and let it spawn the specialists — that nesting is forbidden.
+The orchestrator (main turn) `TeamCreate`s one team and spawns `team-leader`
+TOGETHER WITH the specialists as PEERS (background). The specialists
+`SendMessage` their full conclusions DIRECTLY to `team-leader`, which alone
+reconciles and writes this review, then signals the orchestrator to disband. No
+agent spawns another agent (no nesting); the debate content never enters the
+main turn.
 
-1. `math-theorist` (invoked by orchestrator)
-2. `numerical-debugger` (invoked by orchestrator)
-3. `flow-arch-reviewer` (invoked by orchestrator)
-4. `team-leader` (invoked last; reconciles, does not spawn)
+1. `math-theorist` (peer; DMs `team-leader`)
+2. `numerical-debugger` (peer; DMs `team-leader`)
+3. `flow-arch-reviewer` (peer; DMs `team-leader`)
+4. `team-leader` (peer; sole writer; reconciles, does not spawn)
 
 ## Experiment Record
 
@@ -323,7 +326,7 @@ and let it spawn the specialists — that nesting is forbidden.
 
 ## Required Review
 
-- `team-leader` reconciles the specialists' recorded outputs and records the
+- `team-leader` reconciles the specialists' DM'd conclusions and records the
   final reconciliation. It does NOT spawn the specialists (no nesting).
 - `math-theorist` decides whether the result supports or contradicts the original hypothesis.
 - `numerical-debugger` checks whether metrics are trustworthy or contaminated by implementation, data, solver, or logging issues.

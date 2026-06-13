@@ -13,26 +13,28 @@ Run Phase F1 AgentTeam evidence review for the active experiment.
 - `runtime/knowledge/rejected_ideas.md`
 - `runtime/history/timeline.json`
 
-## AgentTeam Flow (FLAT — no nesting)
+## AgentTeam Flow (FLAT PEER TEAM — no nesting)
 
 Use project agents from `.claude/agents/`. You (the main turn) are the
-orchestrator: invoke the READ-ONLY specialists DIRECTLY and IN PARALLEL, collect
-their returned conclusions, then invoke `team-leader` (the sole writer). Do NOT
-invoke `team-leader` first and let it spawn the specialists — that nesting is
-forbidden.
+orchestrator: `TeamCreate` one team and spawn `team-leader` TOGETHER WITH the
+read-only specialists as PEERS (`run_in_background: true`). The specialists
+`SendMessage` their full conclusions DIRECTLY to `team-leader` — never back to
+you; the review content must not enter the main turn. No agent spawns another
+agent (no nesting).
 
-1. Invoke `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` in parallel
-   to review the completed experiment:
+1. Spawn `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` as peers to
+   review the completed experiment:
    - mathematical hypothesis support or contradiction;
    - numerical reliability and implementation pathologies;
    - architecture-level lesson and actionability.
-2. Hand their conclusions to `team-leader`, which reconciles, classifies the
-   verdict (`learned` / `rejected` / `inconclusive`), waits for all required F1
-   agents, finalizes, and disbands the F1 team. `team-leader` does not spawn
+2. They DM `team-leader`, which reconciles, classifies the verdict (`learned` /
+   `rejected` / `inconclusive`), waits for all required F1 peers, writes the
+   review, and signals the orchestrator to disband. `team-leader` does not spawn
    agents.
 
-If an agent is slow or its output is missing, WAIT and re-invoke — do not
-fabricate the verdict.
+If a conclusion is missing, `team-leader` WAITS and re-requests it by name — do
+not fabricate the verdict. When `team-leader` signals `done`, shut the peers down
+(`SendMessage {type:"shutdown_request"}`) and `TeamDelete`.
 
 ## Required Writes (by `team-leader`)
 

@@ -351,22 +351,26 @@ violation and is forbidden.
 
 Generate candidate architecture modifications for `project/nn-architecture`.
 
-Use a FLAT (non-nested) AgentTeam. The orchestrator (main turn) invokes the
-specialists DIRECTLY and IN PARALLEL, then invokes `team-leader` only to
-reconcile. Do NOT invoke `team-leader` first and let it spawn the specialists —
-that nesting is forbidden, and `team-leader` has no agent-spawning tool.
+Use a FLAT PEER AgentTeam. The orchestrator (main turn) `TeamCreate`s one team
+and spawns `team-leader` TOGETHER WITH the specialists as PEERS (background); the
+specialists `SendMessage` their full conclusions DIRECTLY to `team-leader`, which
+alone reconciles and writes this file, then signals the orchestrator to disband.
+No agent spawns another agent (no nesting): `team-leader` has no agent-spawning
+tool, and the orchestrator does not route specialist content through itself. The
+debate content stays inside the team and never enters the main turn.
 
-1. B1: orchestrator invokes `math-theorist`, `numerical-debugger`,
-   `flow-arch-reviewer` in parallel; then `team-leader` reconciles.
-2. B2: orchestrator invokes `orthogonal-direction-scout`; then `team-leader`
-   reconciles.
-3. B3: orchestrator invokes `math-theorist`, `numerical-debugger`,
-   `flow-arch-reviewer` in parallel; then `team-leader` reconciles and confirms
-   one plan.
+1. B1: orchestrator spawns `math-theorist`, `numerical-debugger`,
+   `flow-arch-reviewer` as peers; they DM `team-leader`, which reconciles.
+2. B2: orchestrator spawns `orthogonal-direction-scout` as a peer; it DMs
+   `team-leader`, which reconciles.
+3. B3: orchestrator spawns `math-theorist`, `numerical-debugger`,
+   `flow-arch-reviewer` as peers; they DM `team-leader`, which reconciles and
+   confirms one plan.
 
-The main Claude turn must not manually replace the project-agent discussion.
-Invoke the named project agents, let them record their outputs in this file, and
-only then apply the plan via `./scripts/apply_agentteam_plan.py --advance`.
+The main Claude turn must not manually replace the project-agent discussion, and
+must not absorb the debate content. Spawn the named peer agents, let
+`team-leader` record the consolidated outputs in this file, and only then apply
+the plan via `./scripts/apply_agentteam_plan.py --advance`.
 
 The team must produce:
 

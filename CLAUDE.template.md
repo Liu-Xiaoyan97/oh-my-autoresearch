@@ -55,15 +55,21 @@ and the phase scripts enforce them; violating attempts are blocked.
    These change ONLY through the phase scripts and the `apply_*` scripts (which
    run as subprocesses). Do not tamper with state to skip a step.
 
-2. **Never fabricate AgentTeam output, and keep the team FLAT.** In every
-   team-leader phase (B1/B2/B3/F1) the orchestrator (main turn) invokes the
-   specialist agents (`math-theorist`, `numerical-debugger`,
-   `flow-arch-reviewer`; `orthogonal-direction-scout` in B2) DIRECTLY and IN
-   PARALLEL. The specialists are READ-ONLY: they only return conclusions. ONLY
-   `team-leader` consolidates/deduplicates those conclusions and writes
-   `runtime/debates/**`. Do NOT invoke `team-leader` first and let it spawn the
-   specialists — that nesting is forbidden. If an agent is slow or its output is
-   missing, WAIT and re-invoke — never synthesize candidate directions, debates,
+2. **Never fabricate AgentTeam output, and keep the team a FLAT peer team.** In
+   every team-leader phase (B1/B2/B3/F1) the orchestrator (main turn) creates a
+   flat team (`TeamCreate`) and spawns `team-leader` TOGETHER WITH the read-only
+   specialists (`math-theorist`, `numerical-debugger`, `flow-arch-reviewer`;
+   `orthogonal-direction-scout` in B2) as PEERS in that team, in the background.
+   The specialists send their **full conclusions DIRECTLY to `team-leader` via
+   `SendMessage`** — never back to the main turn. The debate/validation content
+   circulates only among the four team members and MUST NOT flow into the main
+   turn; the main turn only orchestrates (create team, spawn peers, then apply +
+   disband on the `team-leader` "done" signal). ONLY `team-leader` consolidates/
+   deduplicates and writes `runtime/debates/**`. No agent spawns another agent
+   (no nesting) — `team-leader` does NOT spawn the specialists, and the
+   orchestrator does NOT route specialist content through itself. If a
+   specialist is slow or its conclusion is missing, `team-leader` WAITS and
+   re-requests it by name — never synthesize candidate directions, debates,
    plans, or F1 verdicts yourself.
 
 3. **Model code is `coder`-owned.** All edits to `project/nn-architecture/`
@@ -188,26 +194,46 @@ candidate research directions from:
 * val_loss.json
 * best.json
 
-Phase B has three project-agent steps. The structure is FLAT, not nested: the
-main Claude turn is the orchestrator and invokes the READ-ONLY specialists
-DIRECTLY and IN PARALLEL; it collects their returned conclusions and hands them
-to `team-leader`, the sole writer, which deduplicates/reconciles and writes the
-debate file. `team-leader` MUST NOT spawn any agent.
+Phase B runs as a FLAT PEER TEAM, not a nested hierarchy. The main Claude turn
+is the orchestrator: it creates ONE team and spawns `team-leader` together with
+the read-only specialists as PEERS, then stays out of the debate. The
+specialists send their full conclusions DIRECTLY to `team-leader` via
+`SendMessage`; that content never enters the main turn. `team-leader` is the
+sole writer — it consolidates/deduplicates and writes the debate file, then
+signals the orchestrator to disband.
 
-* B1: orchestrator invokes `math-theorist`, `numerical-debugger`,
-  `flow-arch-reviewer` (parallel) to generate/stress-test candidates → their
-  conclusions go to `team-leader`, which consolidates.
-* B2: orchestrator invokes `orthogonal-direction-scout` to review historical
-  overlap / orthogonality → conclusion goes to `team-leader`.
-* B3: orchestrator invokes `math-theorist`, `numerical-debugger`,
-  `flow-arch-reviewer` (parallel) to debate survivors → `team-leader`
-  reconciles and confirms one plan.
+Orchestration procedure (per team-leader step — B1, then B2, then B3):
 
-Do NOT invoke `team-leader` first and let it spawn the specialists. The
-specialists are read-only and return conclusions; only `team-leader` writes
-`runtime/debates/<exp_name>.md`. `team-leader` waits for every required agent,
-finalizes the decision, and explicitly disbands the team before Phase B
-advances. If agent output is missing, wait and re-invoke — never fabricate.
+1. `TeamCreate` a team (e.g. `team_name: "phaseB-<exp_name>"`).
+2. Spawn the peers with the Agent tool, each with `team_name`, a `name`, and
+   `run_in_background: true` so their output does NOT return into the main turn:
+   - `team-leader` (`subagent_type: team-leader`, `name: "team-leader"`) — tell
+     it which specialists to wait for this step and to write the debate file
+     once all their conclusions arrive, then `SendMessage` the orchestrator
+     `done: runtime/debates/<exp_name>.md`.
+   - each required specialist (`subagent_type` = its name, same `name`) — tell it
+     to `SendMessage` its FULL conclusions to `team-leader` and to return only a
+     one-line ack to the orchestrator (no analysis content).
+3. Wait. The specialists DM `team-leader` directly; the main turn receives only
+   one-line acks and brief peer-DM summaries — never the debate content.
+4. When `team-leader` signals done, the debate file is written. Shut the peers
+   down (`SendMessage {type:"shutdown_request"}`), then `TeamDelete`.
+
+Required specialists per step:
+
+* B1: `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` (parallel) —
+  generate / stress-test candidates → DM `team-leader`, which consolidates.
+* B2: `orthogonal-direction-scout` — review historical overlap / orthogonality
+  → DM `team-leader`.
+* B3: `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` (parallel) —
+  debate survivors → `team-leader` reconciles and confirms one plan.
+
+No agent spawns another agent (no nesting): `team-leader` does NOT spawn the
+specialists, and the orchestrator does NOT route specialist content through
+itself. Only `team-leader` writes `runtime/debates/<exp_name>.md`. `team-leader`
+waits for every required specialist's conclusion before finalizing; if one is
+missing it re-requests by name — never fabricate. Disband the team before
+Phase B advances.
 
 Deduplicate candidates against historical attempts before selecting the plan.
 
@@ -267,13 +293,17 @@ Compare current experiment results against `runtime/experiments/best.json`.
 
 - `phase_f_checkpoint.sh` updates `runtime/experiments/best.json` if the primary
   metric improved.
-- Run F1 AgentTeam root cause analysis with a FLAT (non-nested) structure: the
-  orchestrator invokes the READ-ONLY specialists `math-theorist`,
-  `numerical-debugger`, and `flow-arch-reviewer` DIRECTLY and IN PARALLEL; their
-  conclusions go to `team-leader`, the sole writer, which reconciles, classifies
-  the verdict, waits for all required F1 agents, finalizes, and disbands the F1
-  team. `team-leader` must not spawn the specialists. If agent output is
-  missing, wait and re-invoke — never fabricate.
+- Run F1 AgentTeam root cause analysis as a FLAT PEER TEAM (same topology as
+  Phase B): the orchestrator `TeamCreate`s a team (e.g. `phaseF1-<exp_name>`) and
+  spawns `team-leader` together with the read-only specialists `math-theorist`,
+  `numerical-debugger`, and `flow-arch-reviewer` as PEERS, in the background. The
+  specialists `SendMessage` their full conclusions DIRECTLY to `team-leader`
+  (never into the main turn); `team-leader` reconciles, classifies the verdict,
+  waits for all required F1 specialists, writes the review, then `SendMessage`s
+  the orchestrator `done: runtime/debates/<exp_name>_f1_review.md`. The
+  orchestrator then shuts the peers down and `TeamDelete`s. No agent spawns
+  another agent (no nesting); `team-leader` must not spawn the specialists. If a
+  conclusion is missing, `team-leader` re-requests it by name — never fabricate.
 - `team-leader` writes the review (the `## F1 Verdict` block and an Agent Team
   Execution Log) to `runtime/debates/<exp_name>_f1_review.md`. Then apply it:
 

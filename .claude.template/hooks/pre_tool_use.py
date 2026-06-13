@@ -22,12 +22,14 @@ Enforced invariants
        runtime/knowledge/rejected_ideas.md
 
 2. Debate files are team-leader-authored. In every team-leader phase
-   (B1/B2/B3/F1) the structure is FLAT: the orchestrator (main turn) invokes the
-   specialist agents directly and in parallel; the specialists are READ-ONLY and
-   return their conclusions; only `team-leader` consolidates/deduplicates and
-   writes under runtime/debates/. Therefore only `team-leader` may write
-   runtime/debates/** — not the specialists, and not the main turn. If output is
-   missing, the correct action is to wait / re-invoke, never to fabricate.
+   (B1/B2/B3/F1) the structure is a FLAT PEER TEAM: the orchestrator (main turn)
+   creates one team and spawns `team-leader` together with the READ-ONLY
+   specialists as peers; the specialists SendMessage their conclusions DIRECTLY
+   to `team-leader` (never to the main turn); only `team-leader` consolidates/
+   deduplicates and writes under runtime/debates/. Therefore only `team-leader`
+   may write runtime/debates/** — not the specialists, and not the main turn. If
+   a conclusion is missing, the correct action is for `team-leader` to wait /
+   re-request it, never to fabricate.
 
 3. Model code is coder-owned. Only the `coder` subagent may modify
    project/nn-architecture/. The main turn must delegate implementation to
@@ -125,16 +127,19 @@ def evaluate(rel: str, agent_type: str | None) -> int:
             return deny(
                 "BLOCKED: the main Claude turn must not author or fill in debate "
                 f"files ({rel}).\n"
-                "In team-leader phases the structure is flat: the orchestrator "
-                "invokes the read-only specialists in parallel, then `team-leader` "
-                "consolidates their conclusions and writes the debate file.\n"
-                "If output does not exist yet, WAIT and re-invoke the agents. "
-                "Fabricating agent output yourself is a protocol violation."
+                "In team-leader phases the structure is a flat peer team: the "
+                "orchestrator spawns the read-only specialists and `team-leader` "
+                "as peers; the specialists SendMessage their conclusions directly "
+                "to `team-leader`, which alone writes the debate file.\n"
+                "If a conclusion does not exist yet, WAIT — let `team-leader` "
+                "re-request it. Fabricating agent output yourself is a protocol "
+                "violation."
             )
         return deny(
             f"BLOCKED: agent '{agent_type}' may not write debate files ({rel}). "
-            "Specialists are read-only and return conclusions to the orchestrator; "
-            "only `team-leader` consolidates and writes runtime/debates/**."
+            "Specialists are read-only and SendMessage their conclusions to "
+            "`team-leader`; only `team-leader` consolidates and writes "
+            "runtime/debates/**."
         )
 
     # 3. Model code — only the coder subagent may modify.
