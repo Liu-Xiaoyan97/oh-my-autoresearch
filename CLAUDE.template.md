@@ -10,22 +10,27 @@ advance the loop by running:
 ```
 
 After any phase finishes, immediately inspect `runtime/state/state.json` and
-continue with `./scripts/run_loop.sh`. Do not stop after a single phase just
-because the phase completed. Continue until the state is `BLOCKED` or `DONE`.
+continue with `./scripts/run_loop.sh`. Do not stop mid-iteration (phases
+B/C/D/E/F). Run until the workflow returns to the **Phase A boundary** (Phase F
+completed — one full iteration), or until the state is `BLOCKED` or `DONE`.
 
-Context management — two modes (the Stop hook adapts via `AUTORESEARCH_STOP_AT_A`):
+Context management (the Stop hook stops at the Phase A boundary by default):
 
-- **In-CLI continuous (default)**: the whole A..F loop runs in ONE interactive
-  session and keeps going across iterations; the session stops only at `BLOCKED`
-  or `DONE`. Context is bounded by Claude Code **auto-compact** — ensure it is
-  enabled via `/config`. (Claude cannot self-invoke `/compact`; auto-compact is
-  the in-CLI mechanism.) Because `runtime/` is the source of truth, compaction at
-  any point is safe — after it, re-read runtime/state and continue.
-- **Fresh session per iteration (unattended driver)**: run
-  `./scripts/loop_forever.sh`. It sets `AUTORESEARCH_STOP_AT_A=1` so each
-  iteration runs in its own `claude` process and stops at the Phase A boundary;
-  the driver then starts the next iteration with a clean context — no `/compact`
-  needed at all.
+- **Default — stop at the Phase A boundary.** At the boundary the session is
+  allowed to stop so the context can be compacted before the next iteration.
+  - Interactive CLI: `/compact` then `/loop` to start the next iteration with a
+    clean context (auto-compact may also engage now that control has returned).
+  - Unattended: run `./scripts/loop_forever.sh`, which starts each iteration in a
+    FRESH `claude` process — clean context, no `/compact` needed.
+  This is the reliable mode: Claude cannot self-invoke `/compact`, and Claude
+  Code **auto-compact does NOT fire during an unbroken hook-forced run**, so a
+  single continuous session can climb to 100% context without compacting.
+  Stopping at the boundary returns control to a point where compaction actually
+  happens. Because `runtime/` is the source of truth, resuming after a stop is
+  safe.
+- **Opt-in continuous**: set `AUTORESEARCH_CONTINUOUS=1` to run the whole A..F
+  loop in one session (stops only at `BLOCKED`/`DONE`). Only viable if
+  auto-compact reliably fires for your setup; otherwise context will overflow.
 
 Human intervention is required when the state is `BLOCKED`, when the state is
 `DONE`, or when a command fails in a way the workflow cannot repair.

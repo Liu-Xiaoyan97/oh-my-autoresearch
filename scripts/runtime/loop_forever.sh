@@ -28,11 +28,10 @@ CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CLAUDE_ARGS="${CLAUDE_ARGS:---dangerously-skip-permissions}"
 MAX_ITERS="${AUTORESEARCH_MAX_ITERS:-0}"
 
-# Make the Stop hook allow the per-iteration session to stop at the Phase A
-# boundary; each loop below then starts the next iteration in a fresh `claude`
-# process (clean context). Without this the spawned session would run
-# continuously (the in-CLI default mode).
-export AUTORESEARCH_STOP_AT_A=1
+# The Stop hook stops each spawned session at the Phase A boundary by default,
+# so every loop iteration below runs in a fresh `claude` process (clean context).
+# Make sure we do NOT accidentally inherit continuous mode.
+unset AUTORESEARCH_CONTINUOUS
 
 if ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
   echo "[driver] claude CLI not found (set CLAUDE_BIN). Aborting." >&2
