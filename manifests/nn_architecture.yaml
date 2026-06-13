@@ -120,6 +120,60 @@ copy_if_missing:
   - from: templates/nn_architecture/runtime/training/entrypoint.yaml
     to: runtime/training/entrypoint.yaml
 
+  # Runtime operational scripts (installed into research-runtime/scripts)
+  - from: scripts/runtime/apply_agentteam_plan.py
+    to: scripts/apply_agentteam_plan.py
+  - from: scripts/runtime/apply_demo_model_change.py
+    to: scripts/apply_demo_model_change.py
+  - from: scripts/runtime/apply_f1_review.py
+    to: scripts/apply_f1_review.py
+  - from: scripts/runtime/bootstrap.sh
+    to: scripts/bootstrap.sh
+  - from: scripts/runtime/check_stop_conditions.sh
+    to: scripts/check_stop_conditions.sh
+  - from: scripts/runtime/commit_runtime.sh
+    to: scripts/commit_runtime.sh
+  - from: scripts/runtime/doctor.sh
+    to: scripts/doctor.sh
+  - from: scripts/runtime/list_experiments.sh
+    to: scripts/list_experiments.sh
+  - from: scripts/runtime/reset_current_iteration.sh
+    to: scripts/reset_current_iteration.sh
+  - from: scripts/runtime/reset_runtime.sh
+    to: scripts/reset_runtime.sh
+  - from: scripts/runtime/run_loop.sh
+    to: scripts/run_loop.sh
+  - from: scripts/runtime/run_one_cycle.sh
+    to: scripts/run_one_cycle.sh
+  - from: scripts/runtime/schema_contract.py
+    to: scripts/schema_contract.py
+  - from: scripts/runtime/set_phase.sh
+    to: scripts/set_phase.sh
+  - from: scripts/runtime/show_phase.sh
+    to: scripts/show_phase.sh
+  - from: scripts/runtime/status.sh
+    to: scripts/status.sh
+  - from: scripts/runtime/sync_from_workflow.sh
+    to: scripts/sync_from_workflow.sh
+  - from: scripts/runtime/update_submodules.sh
+    to: scripts/update_submodules.sh
+  - from: scripts/runtime/validate_runtime.sh
+    to: scripts/validate_runtime.sh
+  - from: scripts/runtime/validate_schema.sh
+    to: scripts/validate_schema.sh
+  - from: scripts/runtime/phases/phase_a_history.sh
+    to: scripts/phases/phase_a_history.sh
+  - from: scripts/runtime/phases/phase_b_exploration.sh
+    to: scripts/phases/phase_b_exploration.sh
+  - from: scripts/runtime/phases/phase_c_local_validation.sh
+    to: scripts/phases/phase_c_local_validation.sh
+  - from: scripts/runtime/phases/phase_d_remote_launch.sh
+    to: scripts/phases/phase_d_remote_launch.sh
+  - from: scripts/runtime/phases/phase_e_monitoring.sh
+    to: scripts/phases/phase_e_monitoring.sh
+  - from: scripts/runtime/phases/phase_f_checkpoint.sh
+    to: scripts/phases/phase_f_checkpoint.sh
+
 ensure_dirs:
   - .claude
   - .claude/agents
@@ -133,6 +187,8 @@ ensure_dirs:
   - runtime/experiments
   - runtime/schemas
   - runtime/training
+  - scripts
+  - scripts/phases
 
 never_overwrite:
   - CLAUDE.md
@@ -190,6 +246,19 @@ runtime_required:
   - runtime/knowledge/rejected_ideas.md
   - runtime/experiments/best.json
   - runtime/training/entrypoint.yaml
+  - scripts/run_loop.sh
+  - scripts/set_phase.sh
+  - scripts/validate_runtime.sh
+  - scripts/validate_schema.sh
+  - scripts/schema_contract.py
+  - scripts/apply_agentteam_plan.py
+  - scripts/apply_f1_review.py
+  - scripts/phases/phase_a_history.sh
+  - scripts/phases/phase_b_exploration.sh
+  - scripts/phases/phase_c_local_validation.sh
+  - scripts/phases/phase_d_remote_launch.sh
+  - scripts/phases/phase_e_monitoring.sh
+  - scripts/phases/phase_f_checkpoint.sh
 
 runtime_generated_patterns:
   - runtime/debates/<exp_name>.md
