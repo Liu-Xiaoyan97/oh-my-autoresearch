@@ -46,9 +46,12 @@ every team member: send `shutdown_request` to each member listed in
 each member has exited, then call `TeamDelete`. In in-process mode, the CLI
 panel is rendered from the team/task metadata, so also verify
 `~/.claude/teams/<team>/` and `~/.claude/tasks/<team>/` are gone; if they remain
-after shutdown and `TeamDelete`, remove those two metadata directories as the
-final fallback. The F1 team must never remain visible in the CLI panel after its
-verdict has been applied.
+after shutdown and `TeamDelete`, run
+`./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team> --stale-only`
+as the final fallback. The F1 team must never remain visible in the CLI panel
+after its verdict has been applied; if old in-process sessions remain visible
+after metadata cleanup, send them `shutdown_request` and wait, or restart Claude
+CLI before continuing.
 
 ## Required Writes (by `team-leader`)
 

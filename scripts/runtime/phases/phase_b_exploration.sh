@@ -378,7 +378,12 @@ team: send `shutdown_request` to every member listed in
 exit, call `TeamDelete`, and verify `~/.claude/teams/<team>/` plus
 `~/.claude/tasks/<team>/` are gone. In in-process mode, stale metadata keeps the
 agent visible in the CLI panel; remove those two directories after shutdown and
-`TeamDelete` if they still exist.
+`TeamDelete` if they still exist. Run
+`./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team> --stale-only`
+after teardown. Before creating B2 or B3, also run
+`./scripts/cleanup_agentteam_metadata.py --yes --stale-only`; if the CLI panel
+still shows agents from the previous B subphase, do not create the next team
+until those visible sessions have received `shutdown_request` and disappeared.
 
 The team must produce:
 

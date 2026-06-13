@@ -57,7 +57,17 @@ orchestrator MUST send `shutdown_request` to every member from
 call `TeamDelete`, and verify `~/.claude/teams/<team>/` plus
 `~/.claude/tasks/<team>/` are gone before advancing. In in-process mode, any
 remaining metadata directory keeps the old agent visible in the CLI panel, so
-the final fallback is to remove those two directories after shutdown/TeamDelete.
+the final fallback is:
+
+```bash
+./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team> --stale-only
+```
+
+Also run `./scripts/cleanup_agentteam_metadata.py --yes --stale-only` before
+creating the next team. If the CLI panel still shows old in-process sessions
+after metadata cleanup, those sessions are still alive in the current Claude
+process; send `shutdown_request` to the visible old members and wait for them to
+disappear, or restart Claude CLI before continuing.
 
 ### Completion Signal
 

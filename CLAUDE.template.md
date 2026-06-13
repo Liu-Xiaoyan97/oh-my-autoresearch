@@ -225,6 +225,13 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 1. **检查 team 唯一性。** 在创建任何新 team 之前，确认没有活跃的 team 存在。
    如果 `~/.claude/teams/` 目录下已有活跃的 team 配置，必须先清理干净
    （发送 shutdown_request、TeamDelete）。
+   然后运行：
+   ```bash
+   ./scripts/cleanup_agentteam_metadata.py --yes --stale-only
+   ```
+   如果 CLI agent 面板仍显示上一 B 子阶段的 in-process agent，说明旧 session
+   还活在当前 Claude 进程内存里；此时**不得创建下一 team**，必须先对可见旧
+   agent 发送 `shutdown_request` 并等待它们消失，必要时重启 Claude CLI。
 
 2. `TeamCreate` a team (e.g. `team_name: "phaseB-<exp_name>"`).
 
@@ -267,6 +274,10 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
       模式下，必须确认 `~/.claude/teams/<team_name>/` 与
       `~/.claude/tasks/<team_name>/` 两个目录均已消失，否则 CLI 面板仍会显示
       已取消的 agent。
+      TEARDOWN 之后立即运行：
+      ```bash
+      ./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team_name> --stale-only
+      ```
    c. teardown 成功后，若 `NEXT_COMMAND` 为
       `TEARDOWN_ONLY_THEN_CREATE_B2_TEAM` 或
       `TEARDOWN_ONLY_THEN_CREATE_B3_TEAM`，立即创建下一 B 子步骤的全新 team。
@@ -288,7 +299,9 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 >    已退出的成员会返回错误。仍在的等待 5–10 秒重试，最多 3 轮（约 30 秒）。
 > 3. 调用 `TeamDelete` 收尾。**注意它可能返回 `"No team name found"` 而 no-op**
 >    （见下）——所以不能把它当判据。
-> 4. **验证拆除**：`ls -d ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>`。
+> 4. 运行 metadata cleanup 兜底：
+>    `./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team_name> --stale-only`。
+> 5. **验证拆除**：`ls -d ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>`。
 >    - 两个目录都不存在 → 拆除成功，结束。
 >    - 仍存在 → 先 `pgrep -fl -- '--agent-id'` 确认没有该 team 的残留进程
 >      （tmux/iTerm 后端才会有；in-process 后端恒为空）；确认无进程后，

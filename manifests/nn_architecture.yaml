@@ -131,6 +131,8 @@ copy_if_missing:
     to: scripts/bootstrap.sh
   - from: scripts/runtime/check_stop_conditions.sh
     to: scripts/check_stop_conditions.sh
+  - from: scripts/runtime/cleanup_agentteam_metadata.py
+    to: scripts/cleanup_agentteam_metadata.py
   - from: scripts/runtime/commit_runtime.sh
     to: scripts/commit_runtime.sh
   - from: scripts/runtime/doctor.sh

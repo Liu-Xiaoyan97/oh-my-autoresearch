@@ -49,9 +49,14 @@ Before running the command, release every team member: send
 `TeamDelete`. In in-process mode, the CLI panel is rendered from the team/task
 metadata, so also verify `~/.claude/teams/<team>/` and
 `~/.claude/tasks/<team>/` are gone; if they remain after shutdown and
-`TeamDelete`, remove those two metadata directories as the final fallback. A
-previous B1/B2/B3 team must never remain visible in the CLI panel when Phase C
-or the next B sub-step starts.
+`TeamDelete`, run
+`./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team> --stale-only`
+as the final fallback. Before creating B2/B3, also run
+`./scripts/cleanup_agentteam_metadata.py --yes --stale-only`. A previous
+B1/B2/B3 team must never remain visible in the CLI panel when Phase C or the
+next B sub-step starts; if old in-process sessions remain visible after metadata
+cleanup, send them `shutdown_request` and wait, or restart Claude CLI before
+continuing.
 
 ## Required Writes (by `team-leader`)
 
