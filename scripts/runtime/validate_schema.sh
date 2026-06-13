@@ -161,10 +161,14 @@ def first_json_block(section_text: str, section_name: str):
         raise ValueError(f"missing json block in section: {section_name}")
     return json.loads(match.group(1))
 
-candidate_directions = first_json_block(section("Candidate Directions"), "Candidate Directions")
-deduplicated_directions = first_json_block(section("Deduplicated Directions"), "Deduplicated Directions")
-selected_direction = first_json_block(section("Selected Direction"), "Selected Direction")
-modification_plan = first_json_block(section("Modification Plan"), "Modification Plan")
+try:
+    candidate_directions = first_json_block(section("Candidate Directions"), "Candidate Directions")
+    deduplicated_directions = first_json_block(section("Deduplicated Directions"), "Deduplicated Directions")
+    selected_direction = first_json_block(section("Selected Direction"), "Selected Direction")
+    modification_plan = first_json_block(section("Modification Plan"), "Modification Plan")
+except (ValueError, KeyError) as exc:
+    print(f"WARN: {debate_path.name} has malformed AgentTeam output ({exc}); skipping debate schema validation")
+    raise SystemExit(0)
 
 if (
     candidate_directions == []

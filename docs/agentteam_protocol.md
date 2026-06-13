@@ -17,6 +17,50 @@ The active project agents are defined in `agents/` and installed into
 
 The team-level coordinator lives in `agents/team-leader.md`.
 
+## Communication Protocol
+
+### Message Format
+
+All specialists (`math-theorist`, `numerical-debugger`, `flow-arch-reviewer`,
+`orthogonal-direction-scout`) MUST use the following format when sending their
+full conclusions to `team-leader` via `SendMessage`:
+
+```
+[CONCLUSION] <agent-name>
+
+<full analysis content>
+```
+
+The first line MUST be `[CONCLUSION] <agent-name>` (e.g. `[CONCLUSION] math-theorist`).
+Messages without this marker will be ignored by `team-leader` and will NOT count
+as a received conclusion.
+
+### Cron-Based Polling
+
+- **`team-leader`** creates a 60-second recurring cron (`*/1 * * * *`) via
+  `CronCreate` on startup. When the cron fires, it checks which required
+  specialists are still missing, and sends a brief reminder via `SendMessage`
+  ONLY to missing specialists. Reminders are sent through the cron trigger only
+  — NOT on every message receipt.
+- **The orchestrator** (main Claude turn) creates a 120-second recurring cron
+  (`1-59/2 * * * *`) after spawning all peers. The cron sends a progress query
+  to `team-leader` ("进度查询: ..."). The orchestrator does NOT communicate
+  with any other team member.
+- All cron jobs MUST be cancelled (`CronDelete`) before team disband.
+
+### Team Uniqueness
+
+Only ONE team may exist per phase step. The orchestrator MUST verify no active
+team exists before creating a new one. After receiving the signal, the
+orchestrator MUST cancel its monitoring cron, send `shutdown_request` to all
+members, and `TeamDelete` before advancing.
+
+### Completion Signal
+
+`team-leader` signals completion by sending `"任务完成，解散团队"` via
+`SendMessage` to the orchestrator. This is the ONLY signal the orchestrator
+uses to determine readiness to advance.
+
 ## Phase Ownership
 
 | Phase step | Agents | Required result |
