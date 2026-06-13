@@ -258,9 +258,12 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
       - Phase B 的子步骤（B1/B2/B3）→ team 名称以 `phaseB` 开头
       - Phase F1 → team 名称以 `phaseF1` 开头
    4. 对于每个 team 目录：
-      - 若名称前缀不匹配当前阶段 → 陈旧 team
-      - 向陈旧 team 的**所有成员**发送 `SendMessage {type:"shutdown_request", reason:"阶段不匹配，清理陈旧 team"}`
-      - 执行 `TeamDelete`（若仍失败，记录并继续）
+      - 若名称前缀不匹配当前阶段 → 陈旧 team（很可能是会话边界前遗留的孤儿，
+        `TeamDelete` 会对它 no-op，必须用目录判据 + rm 兜底）
+      - 对陈旧 team 执行主程序文档末尾的「团队拆除标准动作（TEARDOWN）」：
+        逐成员 `shutdown_request` → ping 确认 → `TeamDelete` → 以
+        `~/.claude/teams/<team>/`、`~/.claude/tasks/<team>/` 目录消失为判据，
+        仍残留则 `pgrep` 确认无进程后 `rm -rf` 兜底删除。
    5. 简要记录清理结果。
 
    ## 阶段 2：进度查询（保持耐心，不急于重启）
@@ -322,20 +325,15 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 
    2. **若 `.cron_team_completed` 存在** → team 已正常完成（team-leader 发出了
       "任务完成，解散团队"）：
-      a. **向所有 team 成员发送 `shutdown_request`**
-      b. **确认所有成员已退出**：向每个成员发送简短 ping
-         （`SendMessage` 内容为 "."），已退出的 agent 会返回错误。
-         对仍在运行的 agent，等待 5-10 秒后重试，最多重试 3 轮（约 30 秒）
-      c. 执行 `TeamDelete`
-      c2. **进程兜底扫描**：`TeamDelete` 只删元数据，本身不杀进程。删完后运行
-          `pgrep -fl -- '--agent-id'`（或
-          `ps aux | grep -- '--agent-id' | grep '@<team_name>'`）确认没有残留
-          的 agent 进程；若仍有，按 pid 逐个 `kill` 后再继续。
-      d. 删除 `runtime/state/.cron_team_completed`，并清理本阶段的恢复状态文件
+      a. **执行本节末尾的「团队拆除标准动作（TEARDOWN）」**，并以
+         `~/.claude/teams/<team_name>/` 与 `~/.claude/tasks/<team_name>/`
+         两个目录**均已消失**作为拆除成功的判据（不要以 `TeamDelete` 的返回值
+         为准——它可能 no-op）。
+      b. 删除 `runtime/state/.cron_team_completed`，并清理本阶段的恢复状态文件
          `runtime/state/.cron_patience_reset_at` 与
          `runtime/state/.cron_recreate_count`（若存在）
-      e. 运行 `./scripts/apply_agentteam_plan.py --advance`
-      f. 运行 `./scripts/run_loop.sh`
+      c. 运行 `./scripts/apply_agentteam_plan.py --advance`
+      d. 运行 `./scripts/run_loop.sh`
 
    3. **若 `.cron_team_recreate` 存在** → cron 判定 team-leader 已崩溃（无应答），
       需清空并重建整个 team。**这是唯一允许重建 team 的入口——前提是 team-leader
@@ -346,9 +344,9 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
          block_reason="AgentTeam 反复重建仍失败：team-leader 多次崩溃"；删除
          `.cron_team_recreate`、`.cron_patience_reset_at`、`.cron_recreate_count`
          后运行 `./scripts/run_loop.sh`，本 turn 结束。
-      b. 否则**清空旧 team**：向所有成员发 `shutdown_request` → 逐个 ping 确认
-         退出（最多 3 轮）→ `TeamDelete` → `pgrep -fl -- '--agent-id'` 兜底
-         `kill` 残留进程（拆除语义见下方说明）。
+      b. 否则**清空旧 team**：执行本节末尾的「团队拆除标准动作（TEARDOWN）」，
+         以 `~/.claude/teams/<team_name>/` 与 `~/.claude/tasks/<team_name>/`
+         两个目录均已消失为判据。
       c. 删除 `runtime/state/.cron_team_recreate` 与
          `runtime/state/.cron_patience_reset_at`（若存在）；把
          `runtime/state/.cron_recreate_count` 自增 1 写回。
@@ -364,17 +362,43 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
          team-leader 重启哪些 agent / team-leader 无应答则发重建信号"恢复，
          主程序无需重复查询。
 
-> **为什么必须先 shutdown_request + ping 确认，再 TeamDelete（拆除语义）。**
-> `TeamDelete` 是**纯元数据操作**：它只删除 `~/.claude/teams/<team>/` 与
-> `~/.claude/tasks/<team>/`，并清掉当前会话里的 team 上下文。它**不会**终止任何
-> agent 进程。每个后台 agent 都是一个**独立的 `claude` 进程**
-> （`claude ... --agent-id <name>@<team>`），其 OS 父进程是它自己所在的 shell /
-> iTerm2 分屏 pane，而非编排者；`--parent-session-id` 只是逻辑链接。因此只有
-> **被批准的 `shutdown_request`**（或直接 kill / 关闭 pane）才能真正结束它。
-> 若跳过 c 步直接 `TeamDelete`：(1) 团队若仍有活跃成员，`TeamDelete` 会**失败**；
-> (2) 即便删掉了元数据，残留的 agent 进程仍会以"孤儿"形式留在 iTerm2 里——可被
-> 方向键导航进入、pane 不关闭。这正是先 ping 确认每个成员退出、再 `TeamDelete`、
-> 最后 `pgrep` 兜底扫描的原因。
+> **团队拆除标准动作（TEARDOWN）。** 拆除一个 team 必须按下列顺序，**判据是
+> 磁盘上的 team/task 目录消失，而不是 `TeamDelete` 的返回值**：
+>
+> 1. **对每个成员逐个发 `shutdown_request`**（`SendMessage` to `<member-name>`，
+>    `message:{type:"shutdown_request", reason:"..."}`）。成员名从
+>    `~/.claude/teams/<team_name>/config.json` 的 `members[].name` 解析——这一步
+>    **不依赖当前会话的 team 上下文指针**，所以即使跨会话/compact 之后也能送达。
+>    **这是真正能让 teammate 退出、并使其在 CLI 面板上消失的权威信号。**
+> 2. **确认成员已退出**：向每个成员发简短 ping（`SendMessage` 内容 `"."`），
+>    已退出的成员会返回错误。仍在的等待 5–10 秒重试，最多 3 轮（约 30 秒）。
+> 3. 调用 `TeamDelete` 收尾。**注意它可能返回 `"No team name found"` 而 no-op**
+>    （见下）——所以不能把它当判据。
+> 4. **验证拆除**：`ls -d ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>`。
+>    - 两个目录都不存在 → 拆除成功，结束。
+>    - 仍存在 → 先 `pgrep -fl -- '--agent-id'` 确认没有该 team 的残留进程
+>      （tmux/iTerm 后端才会有；in-process 后端恒为空）；确认无进程后，
+>      **`rm -rf ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>` 兜底删除**
+>      元数据，再复查目录已消失。
+>
+> **为什么需要 rm 兜底（两种后端的故障各不相同）。**
+> `TeamDelete` 是**纯元数据操作 + 依赖当前会话的 team 上下文指针**：它删除
+> `~/.claude/teams/<team>/` 与 `~/.claude/tasks/<team>/`，并清掉会话里的 team
+> 上下文；它**不会**终止任何 teammate。两种后端的残留方式不同：
+> - **tmux / iTerm 后端**：每个 teammate 是**独立 `claude` 进程**
+>   （`claude ... --agent-id <name>@<team>`），OS 父进程是它所在的 shell / iTerm2
+>   分屏 pane。只有**被批准的 `shutdown_request`**（或 kill / 关 pane）能结束它；
+>   否则 `TeamDelete` 即便删了元数据，孤儿进程仍留在 iTerm2 pane 里、可被方向键
+>   导航进入。`pgrep --agent-id` 兜底正是为这种后端。
+> - **in-process 后端**（本部署默认 `teammateMode: in-process`）：teammate 没有
+>   独立进程，作为 `local_workflow` 任务跑在编排者**同一进程内**，其 CLI 面板由
+>   **磁盘上的 team 元数据**渲染。`shutdown_request` 让任务退出、空 team 被回收后
+>   面板才消失。**致命陷阱**：若 team 是在**会话边界/compact 之前**建立的，
+>   continuation 后的会话**不再持有指向它的上下文指针**，此时 `TeamDelete` 直接
+>   返回 `"No team name found"` 并 **no-op**——既不报错也不删元数据，于是元数据
+>   长期残留、CLI 每次启动都把它渲染成可切换的孤儿面板。`pgrep` 对它恒为空、毫无
+>   帮助。**唯一可靠的清理 = 先按名 `shutdown_request` 每个成员，再以目录消失为
+>   判据，目录仍在则 `rm -rf` 兜底。**
 
 Required specialists per step:
 
@@ -454,7 +478,8 @@ Compare current experiment results against `runtime/experiments/best.json`.
 - Run F1 AgentTeam root cause analysis as a FLAT PEER TEAM (same topology as
   Phase B): the orchestrator uses the **same protocols as Phase B**（包括
   增强版 cron prompt 中的阶段校验、Agent 异常恢复、完成检测三步流程，
-  cron 只发信号不清理，主程序负责 shutdown + confirm + TeamDelete）：
+  cron 只发信号不清理，主程序负责按「团队拆除标准动作（TEARDOWN）」清理：
+  shutdown + confirm + TeamDelete + 目录消失判据 + rm 兜底）：
   1. **检查 team 唯一性**（一个阶段只有一个 team）
   2. `TeamCreate` a team (e.g. `phaseF1-<exp_name>`)
   3. Spawn `team-leader` together with the read-only specialists
@@ -468,12 +493,14 @@ Compare current experiment results against `runtime/experiments/best.json`.
      `./scripts/apply_f1_review.py` 而非 `--advance`；标记文件同为
      `runtime/state/.cron_team_completed` 与 `runtime/state/.cron_team_recreate`）
   5. **主程序只与 team-leader 通讯**，不直接联系其他 agent。
-  6. **主程序检查标记**：
-     - `.cron_team_completed` → 确认所有成员退出 → TeamDelete →
+  6. **主程序检查标记**（拆除统一走 Phase B 末尾的「团队拆除标准动作
+     （TEARDOWN）」，以 `~/.claude/teams/<team>/`、`~/.claude/tasks/<team>/`
+     目录消失为判据，目录残留则 `rm -rf` 兜底）：
+     - `.cron_team_completed` → 执行 TEARDOWN（确认目录消失）→
        运行 `./scripts/apply_f1_review.py` → `./scripts/run_loop.sh`；
-     - `.cron_team_recreate` → team-leader 已崩溃：清空旧 team（shutdown +
-       confirm + TeamDelete + pgrep 兜底）→ 重建同名 team（受 ≥2 次重建上限
-       保护）→ 本 turn 结束等待新 team。**team-leader 还在则绝不重建。**
+     - `.cron_team_recreate` → team-leader 已崩溃：执行 TEARDOWN 清空旧 team →
+       重建同名 team（受 ≥2 次重建上限保护）→ 本 turn 结束等待新 team。
+       **team-leader 还在则绝不重建。**
 - `team-leader` writes the review (the `## F1 Verdict` block and an Agent Team
   Execution Log) to `runtime/debates/<exp_name>_f1_review.md`. Then apply it:
 
