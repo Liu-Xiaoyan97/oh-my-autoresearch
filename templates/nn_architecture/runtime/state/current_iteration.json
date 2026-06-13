@@ -11,6 +11,7 @@
     "b1_candidate_review": {
       "status": "not_started",
       "agents": [
+        "team-leader",
         "math-theorist",
         "numerical-debugger",
         "flow-arch-reviewer"
@@ -22,6 +23,10 @@
     "b2_orthogonality_review": {
       "status": "not_started",
       "agent": "orthogonal-direction-scout",
+      "agents": [
+        "team-leader",
+        "orthogonal-direction-scout"
+      ],
       "summary": null,
       "accepted_candidates": [],
       "rejected_candidates": [],
@@ -30,6 +35,7 @@
     "b3_plan_selection": {
       "status": "not_started",
       "agents": [
+        "team-leader",
         "math-theorist",
         "numerical-debugger",
         "flow-arch-reviewer"
@@ -39,9 +45,10 @@
       "implementation_risks": [],
       "diagnostic_requirements": []
     },
-    "f2_evidence_review": {
+    "f1_evidence_review": {
       "status": "not_started",
       "agents": [
+        "team-leader",
         "math-theorist",
         "numerical-debugger",
         "flow-arch-reviewer"

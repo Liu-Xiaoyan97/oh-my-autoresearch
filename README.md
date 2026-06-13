@@ -273,7 +273,7 @@ It answers:
 
 - What is the current experiment?
 - What candidate directions were generated?
-- What did AgentTeam conclude in B1, B2, B3, and F2?
+- What did AgentTeam conclude in B1, B2, B3, and F1?
 - Which direction was selected?
 - What code modification is planned?
 - Did local validation pass?
@@ -400,12 +400,15 @@ If validation fails, the workflow moves to `BLOCKED`.
 
 ---
 
-### Phase D: Remote Training Launch
+### Phase D: Training Launch
 
 Purpose:
 
-- Upload modified code to the remote training environment.
-- Start the training command.
+- If `workflow.config.json` sets `remote_training.enable` or
+  `remote_training.enabled` to `false`, run the configured local training
+  entrypoint in `runtime/training/entrypoint.yaml`.
+- If remote training is enabled, upload modified code to the remote training
+  environment and start the training command.
 
 Runtime updates:
 
@@ -468,6 +471,7 @@ AgentTeam is used for research reasoning, not direct code modification.
 Active roles:
 
 ```text
+team-leader
 math-theorist
 numerical-debugger
 flow-arch-reviewer
@@ -477,10 +481,10 @@ orthogonal-direction-scout
 Phase assignment:
 
 ```text
-B1 = math-theorist + numerical-debugger + flow-arch-reviewer
-B2 = orthogonal-direction-scout
-B3 = math-theorist + numerical-debugger + flow-arch-reviewer
-F2 = math-theorist + numerical-debugger + flow-arch-reviewer
+B1 = team-leader + math-theorist + numerical-debugger + flow-arch-reviewer
+B2 = team-leader + orthogonal-direction-scout
+B3 = team-leader + math-theorist + numerical-debugger + flow-arch-reviewer
+F1 = team-leader + math-theorist + numerical-debugger + flow-arch-reviewer
 ```
 
 Typical responsibilities:
@@ -494,13 +498,19 @@ Typical responsibilities:
 The current role definitions live in:
 
 ```text
-agentteam/roles/
+agents/
 ```
 
 The team-level protocol lives in:
 
 ```text
-agentteam/team.md
+agents/team-leader.md
+```
+
+The manifest installs these files into:
+
+```text
+.claude/agents/
 ```
 
 ---
@@ -509,13 +519,12 @@ agentteam/team.md
 
 ```text
 oh-my-autoresearch/
-├── agentteam/
-│   ├── roles/
-│   │   ├── flow-arch-reviewer.md
-│   │   ├── math-theorist.md
-│   │   ├── numerical-debugger.md
-│   │   └── orthogonal-direction-scout.md
-│   └── team.md
+├── agents/
+│   ├── flow-arch-reviewer.md
+│   ├── math-theorist.md
+│   ├── numerical-debugger.md
+│   ├── orthogonal-direction-scout.md
+│   └── team-leader.md
 ├── CLAUDE.template.md
 ├── docs/
 │   ├── agentteam_protocol.md

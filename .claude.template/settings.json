@@ -1,5 +1,26 @@
 {
-  "name": "claude-workflow-engine",
-  "version": "0.1.0",
-  "description": "template settings placeholder"
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/post_tool_use.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/stop.py"
+          }
+        ]
+      }
+    ]
+  }
 }

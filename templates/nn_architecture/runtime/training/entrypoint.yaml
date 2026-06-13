@@ -1,0 +1,27 @@
+project_dir: project/nn-architecture
+
+local:
+  enabled: true
+  command: >-
+    UV_CACHE_DIR=../../runtime/.uv-cache uv run python train.py
+    --exp-name {exp_name}
+    --model gpt2
+    --dataset wikitext
+    --dataset-config wikitext-2-v1
+    --output-dir ../../output/runs/{exp_name}
+    --metrics-file ../../runtime/experiments/{exp_name}.metrics.json
+    --train-steps 50
+    --batch-size 8
+    --block-size 256
+    --lr 3e-4
+    --log-every 10
+    {extra_args}
+
+  metrics_file: runtime/experiments/{exp_name}.metrics.json
+
+metrics:
+  primary: val_loss
+  mode: minimize
+  required_fields:
+    - best_val_loss
+    - final_val_loss

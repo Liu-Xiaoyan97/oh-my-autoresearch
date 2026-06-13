@@ -1,6 +1,6 @@
 # evaluate
 
-Run Phase F2 AgentTeam evidence review for the active experiment.
+Run Phase F1 AgentTeam evidence review for the active experiment.
 
 ## Required Reads
 
@@ -15,9 +15,12 @@ Run Phase F2 AgentTeam evidence review for the active experiment.
 
 ## AgentTeam Flow
 
-Ask `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` to review
-the completed experiment from three angles:
+Use project agents from `.claude/agents/`.
 
+Ask `team-leader`, `math-theorist`, `numerical-debugger`, and
+`flow-arch-reviewer` to review the completed experiment:
+
+- team-leader reconciliation and schema-complete runtime write;
 - mathematical hypothesis support or contradiction;
 - numerical reliability and implementation pathologies;
 - architecture-level lesson and actionability.
@@ -29,7 +32,7 @@ the completed experiment from three angles:
   - `root_cause_analysis.agent_votes`
   - `root_cause_analysis.verdict`
   - `root_cause_analysis.summary`
-  - `agentteam.f2_evidence_review`
+  - `agentteam.f1_evidence_review`
 - Append a timeline event to `runtime/history/timeline.json`.
 - If verdict is `learned`, append to `runtime/knowledge/learned_patterns.md`.
 - If verdict is `rejected`, append to `runtime/knowledge/rejected_ideas.md`.

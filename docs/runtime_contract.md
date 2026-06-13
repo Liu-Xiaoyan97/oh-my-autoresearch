@@ -53,7 +53,7 @@ This file answers:
 * What is the active experiment?
 * What direction was selected?
 * What code modification was planned?
-* What did AgentTeam conclude in B1, B2, B3, and F2?
+* What did AgentTeam conclude in B1, B2, B3, and F1?
 * Did local validation pass?
 * What is the remote training status?
 * What was the final result?
@@ -63,7 +63,7 @@ The `agentteam` object stores structured summaries for:
 * `b1_candidate_review`
 * `b2_orthogonality_review`
 * `b3_plan_selection`
-* `f2_evidence_review`
+* `f1_evidence_review`
 
 The full debate remains append-oriented in `runtime/debates/<exp_name>.md`.
 

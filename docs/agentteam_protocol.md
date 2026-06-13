@@ -1,4 +1,4 @@
-# AgentTeam Protocol
+# Agents Protocol
 
 AgentTeam is the research reasoning layer of AutoResearch. It may propose,
 critique, deduplicate, debate, synthesize, and evaluate experiment evidence. It
@@ -6,23 +6,25 @@ must not directly modify target model code.
 
 ## Active Roles
 
-The active team is defined in `agentteam/roles/`:
+The active project agents are defined in `agents/` and installed into
+`.claude/agents/`:
 
+- `team-leader`
 - `math-theorist`
 - `numerical-debugger`
 - `flow-arch-reviewer`
 - `orthogonal-direction-scout`
 
-The team-level protocol lives in `agentteam/team.md`.
+The team-level coordinator lives in `agents/team-leader.md`.
 
 ## Phase Ownership
 
 | Phase step | Agents | Required result |
 |---|---|---|
-| `B1` | `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` | Candidate directions with theory, numerical, and architecture-risk notes. |
-| `B2` | `orthogonal-direction-scout` | Historical-overlap review and deduplicated candidate list. |
-| `B3` | `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` | Final debate and one concrete Phase C modification plan. |
-| `F2` | `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` | Root-cause review and learned/rejected/inconclusive verdict. |
+| `B1` | `team-leader`, `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` | Candidate directions with theory, numerical, and architecture-risk notes. |
+| `B2` | `team-leader`, `orthogonal-direction-scout` | Historical-overlap review and deduplicated candidate list. |
+| `B3` | `team-leader`, `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` | Final debate and one concrete Phase C modification plan. |
+| `F1` | `team-leader`, `math-theorist`, `numerical-debugger`, `flow-arch-reviewer` | Root-cause review and learned/rejected/inconclusive verdict. |
 
 ## Phase B Protocol
 
@@ -39,6 +41,9 @@ Inputs:
 
 Responsibilities:
 
+- `team-leader` coordinates the B1 discussion, confirms each role contributed,
+  reconciles disagreements, and checks the output shape before the workflow
+  advances.
 - `math-theorist` checks mathematical validity and hidden assumptions.
 - `numerical-debugger` checks empirical plausibility, diagnostic needs, and
   numerical failure modes.
@@ -54,7 +59,8 @@ Required B1 output:
 
 ### B2: Orthogonality Review
 
-`orthogonal-direction-scout` reviews B1 candidates against the runtime record.
+`team-leader` and `orthogonal-direction-scout` review B1 candidates against the
+runtime record.
 
 Required checks:
 
@@ -77,7 +83,8 @@ explicit override reason in the debate log.
 
 ### B3: Final Debate and Plan Selection
 
-The B1 team reviews the B2 result and selects one implementation plan.
+`team-leader`, `math-theorist`, `numerical-debugger`, and
+`flow-arch-reviewer` review the B2 result and select one implementation plan.
 
 Required B3 output:
 
@@ -103,9 +110,9 @@ runtime/state/current_iteration.json
 
 ## Phase F Protocol
 
-### F2: Evidence Review and Root-Cause Analysis
+### F1: Evidence Review and Root-Cause Analysis
 
-After Phase E writes experiment results, the F2 team evaluates what happened.
+After Phase E writes experiment results, the F1 team evaluates what happened.
 
 Inputs:
 
@@ -118,6 +125,8 @@ Inputs:
 
 Responsibilities:
 
+- `team-leader` coordinates the F1 review, reconciles votes, and confirms
+  `agentteam.f1_evidence_review` and `root_cause_analysis` are schema-complete.
 - `math-theorist` evaluates whether the result supports or contradicts the
   original theoretical hypothesis.
 - `numerical-debugger` checks whether observed metrics are trustworthy or
@@ -125,7 +134,7 @@ Responsibilities:
 - `flow-arch-reviewer` synthesizes the verdict and decides whether the lesson is
   actionable.
 
-Required F2 output:
+Required F1 output:
 
 - root-cause summary;
 - per-agent vote;

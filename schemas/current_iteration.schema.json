@@ -5,6 +5,7 @@
   "required": [
     "exp_name",
     "iteration",
+    "agentteam",
     "local_validation",
     "remote_training",
     "result"
@@ -41,7 +42,7 @@
         "b1_candidate_review",
         "b2_orthogonality_review",
         "b3_plan_selection",
-        "f2_evidence_review"
+        "f1_evidence_review"
       ],
       "properties": {
         "b1_candidate_review": {
@@ -54,10 +55,7 @@
             },
             "agents": {
               "type": "array",
-              "items": {
-                "type": "string",
-                "enum": ["math-theorist", "numerical-debugger", "flow-arch-reviewer"]
-              }
+              "const": ["team-leader", "math-theorist", "numerical-debugger", "flow-arch-reviewer"]
             },
             "summary": {
               "type": ["string", "null"]
@@ -73,7 +71,7 @@
         },
         "b2_orthogonality_review": {
           "type": "object",
-          "required": ["status", "agent", "summary", "accepted_candidates", "rejected_candidates", "override_reason"],
+          "required": ["status", "agent", "agents", "summary", "accepted_candidates", "rejected_candidates", "override_reason"],
           "properties": {
             "status": {
               "type": "string",
@@ -82,6 +80,10 @@
             "agent": {
               "type": "string",
               "const": "orthogonal-direction-scout"
+            },
+            "agents": {
+              "type": "array",
+              "const": ["team-leader", "orthogonal-direction-scout"]
             },
             "summary": {
               "type": ["string", "null"]
@@ -114,10 +116,7 @@
             },
             "agents": {
               "type": "array",
-              "items": {
-                "type": "string",
-                "enum": ["math-theorist", "numerical-debugger", "flow-arch-reviewer"]
-              }
+              "const": ["team-leader", "math-theorist", "numerical-debugger", "flow-arch-reviewer"]
             },
             "selected_candidate": {
               "type": ["string", "null"]
@@ -133,7 +132,7 @@
             }
           }
         },
-        "f2_evidence_review": {
+        "f1_evidence_review": {
           "type": "object",
           "required": ["status", "agents", "summary", "verdict", "missing_evidence"],
           "properties": {
@@ -143,10 +142,7 @@
             },
             "agents": {
               "type": "array",
-              "items": {
-                "type": "string",
-                "enum": ["math-theorist", "numerical-debugger", "flow-arch-reviewer"]
-              }
+              "const": ["team-leader", "math-theorist", "numerical-debugger", "flow-arch-reviewer"]
             },
             "summary": {
               "type": ["string", "null"]

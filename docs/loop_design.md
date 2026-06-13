@@ -30,19 +30,22 @@ B1 -> B2 -> B3
 where:
 
 - `B1` is the theory, numerical, and architecture candidate-generation pass by
+  `team-leader`, `math-theorist`, `numerical-debugger`, and
+  `flow-arch-reviewer`.
+- `B2` is the orthogonality review by `team-leader` and
+  `orthogonal-direction-scout`.
+- `B3` is the final debate and plan selection by `team-leader`,
   `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer`.
-- `B2` is the orthogonality review by `orthogonal-direction-scout`.
-- `B3` is the final debate and plan selection by `math-theorist`,
-  `numerical-debugger`, and `flow-arch-reviewer`.
 
 Phase F includes:
 
 ```text
-F2
+F1
 ```
 
-where `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` review the
-experiment evidence and produce the root-cause verdict.
+where `team-leader`, `math-theorist`, `numerical-debugger`, and
+`flow-arch-reviewer` review the experiment evidence and produce the root-cause
+verdict.
 
 If a phase fails, the workflow MUST move to: `BLOCKED`
 with 
@@ -83,7 +86,7 @@ The workflow MUST NOT use long-running sleep + ssh polling loops.
 ## AgentTeam Rule
 
 AgentTeam may propose, debate, deduplicate, and evaluate ideas according to the
-B1/B2/B3/F2 ownership in `docs/agentteam_protocol.md`.
+B1/B2/B3/F1 ownership in `docs/agentteam_protocol.md`.
 
 AgentTeam MUST NOT directly modify model code.
 

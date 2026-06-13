@@ -46,12 +46,13 @@ Purpose:
 
 AgentTeam steps:
 
-* B1: `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer`
-  generate and stress-test candidate directions.
-* B2: `orthogonal-direction-scout` reviews B1 candidates for historical overlap
-  and orthogonality.
-* B3: `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` select
-  one concrete implementation plan from the B2 survivors.
+* B1: `team-leader`, `math-theorist`, `numerical-debugger`, and
+  `flow-arch-reviewer` generate and stress-test candidate directions.
+* B2: `team-leader` and `orthogonal-direction-scout` review B1 candidates for
+  historical overlap and orthogonality.
+* B3: `team-leader`, `math-theorist`, `numerical-debugger`, and
+  `flow-arch-reviewer` select one concrete implementation plan from the B2
+  survivors.
 
 Outputs:
 
@@ -78,12 +79,14 @@ Runtime updates:
 
 ⸻
 
-Phase D: Remote Training Launch
+Phase D: Training Launch
 
 Purpose:
 
-* Upload modified code to the remote training server.
-* Start remote training.
+* If `workflow.config.json` disables remote training, run local training from
+  `runtime/training/entrypoint.yaml`.
+* If remote training is enabled, upload modified code to the remote training
+  server and start remote training.
 
 Runtime updates:
 
@@ -115,7 +118,7 @@ Purpose:
 
 * Compare current result with best.json.
 * Update best.json if improved.
-* Run F2 AgentTeam root cause analysis with `math-theorist`,
+* Run F1 AgentTeam root cause analysis with `team-leader`, `math-theorist`,
   `numerical-debugger`, and `flow-arch-reviewer`.
 * Append learned or rejected knowledge.
 * Append timeline event.

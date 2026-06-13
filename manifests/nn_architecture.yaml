@@ -4,6 +4,61 @@ version: 0.1.0
 runtime_root: runtime
 
 copy_if_missing:
+  # Claude Code root instructions and automation
+  - from: CLAUDE.template.md
+    to: CLAUDE.md
+
+  - from: .claude.template/settings.json
+    to: .claude/settings.json
+
+  - from: .claude.template/commands/bootstrap.md
+    to: .claude/commands/bootstrap.md
+
+  - from: .claude.template/commands/debate.md
+    to: .claude/commands/debate.md
+
+  - from: .claude.template/commands/evaluate.md
+    to: .claude/commands/evaluate.md
+
+  - from: .claude.template/commands/finalize.md
+    to: .claude/commands/finalize.md
+
+  - from: .claude.template/commands/loop.md
+    to: .claude/commands/loop.md
+
+  - from: .claude.template/commands/next_iteration.md
+    to: .claude/commands/next_iteration.md
+
+  - from: .claude.template/commands/sync.md
+    to: .claude/commands/sync.md
+
+  - from: agents/team-leader.md
+    to: .claude/agents/team-leader.md
+
+  - from: agents/math-theorist.md
+    to: .claude/agents/math-theorist.md
+
+  - from: agents/numerical-debugger.md
+    to: .claude/agents/numerical-debugger.md
+
+  - from: agents/flow-arch-reviewer.md
+    to: .claude/agents/flow-arch-reviewer.md
+
+  - from: agents/orthogonal-direction-scout.md
+    to: .claude/agents/orthogonal-direction-scout.md
+
+  - from: .claude.template/hooks/pre_tool_use.py
+    to: .claude/hooks/pre_tool_use.py
+
+  - from: .claude.template/hooks/post_tool_use.py
+    to: .claude/hooks/post_tool_use.py
+
+  - from: .claude.template/hooks/stop.py
+    to: .claude/hooks/stop.py
+
+  - from: .claude.template/hooks/validate_state.py
+    to: .claude/hooks/validate_state.py
+
   # Schemas
   - from: schemas/objective.schema.json
     to: runtime/schemas/objective.schema.json
@@ -58,7 +113,15 @@ copy_if_missing:
   - from: templates/nn_architecture/runtime/experiments/best.json
     to: runtime/experiments/best.json
 
+  # Training entrypoints
+  - from: templates/nn_architecture/runtime/training/entrypoint.yaml
+    to: runtime/training/entrypoint.yaml
+
 ensure_dirs:
+  - .claude
+  - .claude/agents
+  - .claude/commands
+  - .claude/hooks
   - runtime/objective
   - runtime/state
   - runtime/history
@@ -66,8 +129,11 @@ ensure_dirs:
   - runtime/debates
   - runtime/experiments
   - runtime/schemas
+  - runtime/training
 
 never_overwrite:
+  - CLAUDE.md
+  - .claude/settings.local.json
   - runtime/schemas
   # User-owned objective
   - runtime/objective/objective.yaml
@@ -88,7 +154,19 @@ never_overwrite:
   - runtime/debates
   - runtime/experiments
 
+  # Deployment-specific training commands
+  - runtime/training/entrypoint.yaml
+
 runtime_required:
+  - CLAUDE.md
+  - .claude/settings.json
+  - .claude/agents/team-leader.md
+  - .claude/agents/math-theorist.md
+  - .claude/agents/numerical-debugger.md
+  - .claude/agents/flow-arch-reviewer.md
+  - .claude/agents/orthogonal-direction-scout.md
+  - .claude/commands/loop.md
+  - .claude/hooks/validate_state.py
   - runtime/schemas/objective.schema.json
   - runtime/schemas/state.schema.json
   - runtime/schemas/current_iteration.schema.json
@@ -105,6 +183,7 @@ runtime_required:
   - runtime/knowledge/learned_patterns.md
   - runtime/knowledge/rejected_ideas.md
   - runtime/experiments/best.json
+  - runtime/training/entrypoint.yaml
 
 runtime_generated_patterns:
   - runtime/debates/<exp_name>.md

@@ -18,7 +18,8 @@ ALLOWED_REMOTE_TRAINING_STATUS = {"not_started", "queued", "running", "succeeded
 ALLOWED_RESULT_STATUS = {"pending", "succeeded", "failed", "cancelled"}
 ALLOWED_VAL_LOSS_STATUS = {"queued", "running", "succeeded", "failed", "cancelled"}
 ALLOWED_AGENTTEAM_STATUS = {"not_started", "in_progress", "complete", "blocked", "skipped"}
-B1_B3_F2_AGENTS = ["math-theorist", "numerical-debugger", "flow-arch-reviewer"]
+B1_B3_F1_AGENTS = ["team-leader", "math-theorist", "numerical-debugger", "flow-arch-reviewer"]
+B2_AGENTS = ["team-leader", "orthogonal-direction-scout"]
 B2_AGENT = "orthogonal-direction-scout"
 
 
@@ -223,14 +224,14 @@ def validate_agentteam(value: Any, path: Path, errors: list[str]) -> None:
         "b1_candidate_review",
         "b2_orthogonality_review",
         "b3_plan_selection",
-        "f2_evidence_review",
+        "f1_evidence_review",
     ]
     _require_keys(value, path, required_sections, errors, prefix="agentteam.")
 
     b1 = _optional_object(value, "b1_candidate_review", path, errors)
     if b1:
         _validate_agentteam_status(b1, "agentteam.b1_candidate_review", path, errors)
-        _validate_exact_agents(b1.get("agents"), B1_B3_F2_AGENTS, "agentteam.b1_candidate_review.agents", path, errors)
+        _validate_exact_agents(b1.get("agents"), B1_B3_F1_AGENTS, "agentteam.b1_candidate_review.agents", path, errors)
         if not isinstance(b1.get("candidate_count"), int) or b1.get("candidate_count", -1) < 0:
             errors.append(f"{path} agentteam.b1_candidate_review.candidate_count must be a non-negative integer")
         if not isinstance(b1.get("blocking_issues"), list):
@@ -241,6 +242,7 @@ def validate_agentteam(value: Any, path: Path, errors: list[str]) -> None:
         _validate_agentteam_status(b2, "agentteam.b2_orthogonality_review", path, errors)
         if b2.get("agent") != B2_AGENT:
             errors.append(f"{path} agentteam.b2_orthogonality_review.agent must be {B2_AGENT}")
+        _validate_exact_agents(b2.get("agents"), B2_AGENTS, "agentteam.b2_orthogonality_review.agents", path, errors)
         for key in ["accepted_candidates", "rejected_candidates"]:
             if not isinstance(b2.get(key), list):
                 errors.append(f"{path} agentteam.b2_orthogonality_review.{key} must be a list")
@@ -248,19 +250,19 @@ def validate_agentteam(value: Any, path: Path, errors: list[str]) -> None:
     b3 = _optional_object(value, "b3_plan_selection", path, errors)
     if b3:
         _validate_agentteam_status(b3, "agentteam.b3_plan_selection", path, errors)
-        _validate_exact_agents(b3.get("agents"), B1_B3_F2_AGENTS, "agentteam.b3_plan_selection.agents", path, errors)
+        _validate_exact_agents(b3.get("agents"), B1_B3_F1_AGENTS, "agentteam.b3_plan_selection.agents", path, errors)
         for key in ["implementation_risks", "diagnostic_requirements"]:
             if not isinstance(b3.get(key), list):
                 errors.append(f"{path} agentteam.b3_plan_selection.{key} must be a list")
 
-    f2 = _optional_object(value, "f2_evidence_review", path, errors)
-    if f2:
-        _validate_agentteam_status(f2, "agentteam.f2_evidence_review", path, errors)
-        _validate_exact_agents(f2.get("agents"), B1_B3_F2_AGENTS, "agentteam.f2_evidence_review.agents", path, errors)
-        if f2.get("verdict") not in {"learned", "rejected", "inconclusive", None}:
-            errors.append(f"{path} agentteam.f2_evidence_review.verdict must be learned, rejected, inconclusive, or null")
-        if not isinstance(f2.get("missing_evidence"), list):
-            errors.append(f"{path} agentteam.f2_evidence_review.missing_evidence must be a list")
+    f1 = _optional_object(value, "f1_evidence_review", path, errors)
+    if f1:
+        _validate_agentteam_status(f1, "agentteam.f1_evidence_review", path, errors)
+        _validate_exact_agents(f1.get("agents"), B1_B3_F1_AGENTS, "agentteam.f1_evidence_review.agents", path, errors)
+        if f1.get("verdict") not in {"learned", "rejected", "inconclusive", None}:
+            errors.append(f"{path} agentteam.f1_evidence_review.verdict must be learned, rejected, inconclusive, or null")
+        if not isinstance(f1.get("missing_evidence"), list):
+            errors.append(f"{path} agentteam.f1_evidence_review.missing_evidence must be a list")
 
 
 def _optional_object(data: dict[str, Any], key: str, path: Path, errors: list[str]) -> dict[str, Any]:

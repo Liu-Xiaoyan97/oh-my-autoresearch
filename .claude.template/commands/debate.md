@@ -15,9 +15,11 @@ Run Phase B AgentTeam debate for the active iteration.
 
 ## AgentTeam Flow
 
-1. B1: ask `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` to generate and stress-test candidate directions.
-2. B2: ask `orthogonal-direction-scout` to reject duplicates and confirm orthogonality against runtime history.
-3. B3: ask `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` to select one Phase C implementation plan.
+Use project agents from `.claude/agents/`.
+
+1. B1: ask `team-leader`, `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` to generate and stress-test candidate directions.
+2. B2: ask `team-leader` and `orthogonal-direction-scout` to reject duplicates and confirm orthogonality against runtime history.
+3. B3: ask `team-leader`, `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` to select one Phase C implementation plan.
 
 ## Required Writes
 
