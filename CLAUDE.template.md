@@ -216,8 +216,14 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
      one-line ack to the orchestrator (no analysis content).
 3. Wait. The specialists DM `team-leader` directly; the main turn receives only
    one-line acks and brief peer-DM summaries — never the debate content.
-4. When `team-leader` signals done, the debate file is written. Shut the peers
-   down (`SendMessage {type:"shutdown_request"}`), then `TeamDelete`.
+4. If a required specialist has not returned, `team-leader` runs one-minute
+   response polling: every 60 seconds it sends `SendMessage` only to missing
+   specialists, records each query in the execution log, and keeps waiting.
+5. After every required specialist returns, `team-leader` cancels the polling
+   cron/check, finalizes, writes the debate file, and signals done.
+6. When `team-leader` signals done, the debate file is written. Shut the peers
+   down (`SendMessage {type:"shutdown_request"}`), then `TeamDelete`, before
+   running any apply script or advancing the phase.
 
 Required specialists per step:
 
@@ -232,8 +238,9 @@ No agent spawns another agent (no nesting): `team-leader` does NOT spawn the
 specialists, and the orchestrator does NOT route specialist content through
 itself. Only `team-leader` writes `runtime/debates/<exp_name>.md`. `team-leader`
 waits for every required specialist's conclusion before finalizing; if one is
-missing it re-requests by name — never fabricate. Disband the team before
-Phase B advances.
+missing it re-requests by name every 60 seconds — never fabricate. Cancel the
+polling after all required conclusions arrive. Disband the team before Phase B
+advances.
 
 Deduplicate candidates against historical attempts before selecting the plan.
 
@@ -303,7 +310,11 @@ Compare current experiment results against `runtime/experiments/best.json`.
   the orchestrator `done: runtime/debates/<exp_name>_f1_review.md`. The
   orchestrator then shuts the peers down and `TeamDelete`s. No agent spawns
   another agent (no nesting); `team-leader` must not spawn the specialists. If a
-  conclusion is missing, `team-leader` re-requests it by name — never fabricate.
+  conclusion is missing, `team-leader` re-requests it by name every 60 seconds,
+  records each query in the execution log, and keeps waiting — never fabricate.
+  After all required conclusions arrive, `team-leader` cancels the polling
+  cron/check, writes the review, and signals done. The orchestrator must shut
+  down and `TeamDelete` the F1 team before running `apply_f1_review.py`.
 - `team-leader` writes the review (the `## F1 Verdict` block and an Agent Team
   Execution Log) to `runtime/debates/<exp_name>_f1_review.md`. Then apply it:
 

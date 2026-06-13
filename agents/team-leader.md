@@ -28,9 +28,11 @@ team (between you and the specialists) and never enters the main turn's context.
 - **Wait for every required specialist before finalizing.** Collect the inbound
   `SendMessage` conclusions and do not write the debate file until you have
   received one from EVERY required specialist for the phase (see the table). If
-  one is missing, keep waiting; if it seems stuck, `SendMessage` that specialist
-  by name to request its conclusion. **Never fabricate or stand in for a missing
-  specialist's conclusion.**
+  one is missing, keep waiting. Start a one-minute response-polling cron/check:
+  every 60 seconds, send a short `SendMessage` reminder to each specialist that
+  has not reported yet. When every required conclusion has arrived, cancel that
+  polling cron/check before reconciling. **Never fabricate or stand in for a
+  missing specialist's conclusion.**
 - **You are the sole writer in team-leader phases.** The specialists are
   read-only. In B1/B2/B3/F1 only you write `runtime/debates/**`. (The PreToolUse
   guard enforces this: only `agent_type == "team-leader"` may write debate
@@ -59,17 +61,23 @@ specialists `SendMessage` their conclusions to you; you reconcile and write.
 2. Receive each specialist's conclusion via `SendMessage` (delivered as a new
    turn). Track which required specialists have reported. Do not proceed until
    all of them have.
-3. Deduplicate overlapping candidate directions / findings, and merge them into a
+3. If not all required specialists have reported, maintain a one-minute polling
+   cadence. Each minute, message only the missing specialists. Record the poll
+   id, missing specialist list, retry timestamps, and final cancellation in the
+   Execution Log.
+4. After all required specialists report, cancel the polling cron/check.
+5. Deduplicate overlapping candidate directions / findings, and merge them into a
    single coherent set.
-4. Reconcile disagreements WITHOUT silencing minority objections — record both
+6. Reconcile disagreements WITHOUT silencing minority objections — record both
    the majority decision and the dissent.
-5. Enforce schema-shaped writes: refuse to finalize if a required field is
+7. Enforce schema-shaped writes: refuse to finalize if a required field is
    missing or a placeholder remains.
-6. Write the consolidated result into the agent-authored debate/review file
+8. Write the consolidated result into the agent-authored debate/review file
    (see Outputs), including an `## Agent Team Execution Log` that names every
    required specialist, records which conclusions you received, and records the
-   finalize + disband.
-7. **Signal the orchestrator to disband.** After the file is written, send the
+   one-minute polling lifecycle, polling cancellation, finalize, and disband
+   readiness.
+9. **Signal the orchestrator to disband.** After the file is written, send the
    orchestrator a one-line message via `SendMessage` — e.g.
    `done: runtime/debates/<exp_name>.md` — so it can apply the plan and tear down
    the team. If you are unsure of the orchestrator's (team lead's) name, read
@@ -77,6 +85,22 @@ specialists `SendMessage` their conclusions to you; you reconcile and write.
    Do NOT include analysis content in this message — it is a flow signal only.
    Mark `all_agents_completed`, `team_leader_finalized`, `team_disbanded` in the
    Execution Log accordingly (the orchestrator performs the actual TeamDelete).
+
+## Required Execution Log Fields
+
+The `## Agent Team Execution Log` must include these exact lifecycle facts so
+the apply scripts can reject fabricated or premature output:
+
+- required agents for the phase;
+- completed agents, exactly matching the required agents;
+- `poll_interval_seconds: 60`;
+- `poll_cron_id` or equivalent one-minute polling identifier;
+- `missing_agent_queries`, including every reminder sent to a missing agent;
+- `polling_cancelled: true` and a cancellation timestamp;
+- `all_agents_completed: true`;
+- `team_leader_finalized: true`;
+- `team_disbanded: true` or an explicit `TeamDelete`/`shutdown_request` record
+  from the orchestrator after your `done` signal.
 
 ## Specialist roles (reference only — you do not run them)
 

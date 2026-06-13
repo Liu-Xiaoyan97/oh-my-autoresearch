@@ -346,6 +346,17 @@ def _validate_team_lifecycle(
     if not isinstance(lifecycle.get("disbanded_at"), str) or not lifecycle.get("disbanded_at"):
         errors.append(f"{path} {prefix}.team_lifecycle.disbanded_at must be a non-empty string when status is complete")
 
+    polling = lifecycle.get("polling")
+    if not isinstance(polling, dict):
+        errors.append(f"{path} {prefix}.team_lifecycle.polling must be an object")
+        return
+    if polling.get("poll_interval_seconds") != 60:
+        errors.append(f"{path} {prefix}.team_lifecycle.polling.poll_interval_seconds must be 60")
+    if polling.get("polling_cancelled") is not True:
+        errors.append(f"{path} {prefix}.team_lifecycle.polling.polling_cancelled must be true when status is complete")
+    if not isinstance(polling.get("polling_cancelled_at"), str) or not polling.get("polling_cancelled_at"):
+        errors.append(f"{path} {prefix}.team_lifecycle.polling.polling_cancelled_at must be a non-empty string when status is complete")
+
 
 def validate_val_loss(root: Path, errors: list[str]) -> dict[str, Any]:
     path = root / "runtime/state/val_loss.json"

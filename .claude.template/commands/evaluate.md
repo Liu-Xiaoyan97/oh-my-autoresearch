@@ -33,14 +33,23 @@ agent (no nesting).
    agents.
 
 If a conclusion is missing, `team-leader` WAITS and re-requests it by name — do
-not fabricate the verdict. When `team-leader` signals `done`, shut the peers down
-(`SendMessage {type:"shutdown_request"}`) and `TeamDelete`.
+not fabricate the verdict. `team-leader` must run one-minute response polling
+for missing specialists: every 60 seconds it messages only agents that have not
+returned a conclusion yet; after all required conclusions arrive it cancels that
+polling before writing.
+
+When `team-leader` signals `done`, shut the peers down
+(`SendMessage {type:"shutdown_request"}`) and `TeamDelete` BEFORE running
+`apply_f1_review.py` or `run_loop.sh`. The F1 team must never remain alive after
+its verdict has been applied.
 
 ## Required Writes (by `team-leader`)
 
 `team-leader` writes the review to `runtime/debates/<exp_name>_f1_review.md`: the
 `## F1 Verdict` JSON block (verdict, summary, missing_evidence, agent_votes) and
-an `## Agent Team Execution Log` naming every required agent.
+an `## Agent Team Execution Log` naming every required agent, recording the
+60-second polling id/retries, recording polling cancellation, and recording that
+the orchestrator shut down and deleted the team.
 
 ## Apply (by the main turn)
 

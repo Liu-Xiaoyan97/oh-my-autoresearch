@@ -35,8 +35,15 @@ content through yourself.
 
 The specialists are read-only and only DM their conclusions to `team-leader`. If
 a conclusion does not exist yet, `team-leader` WAITS and re-requests it by name —
-do not fabricate. When `team-leader` signals `done`, shut the peers down
-(`SendMessage {type:"shutdown_request"}`) and `TeamDelete`.
+do not fabricate. `team-leader` must run one-minute response polling for missing
+specialists: every 60 seconds it messages only agents that have not returned a
+conclusion yet; after all required conclusions arrive it cancels that polling
+before writing.
+
+When `team-leader` signals `done`, shut the peers down
+(`SendMessage {type:"shutdown_request"}`) and `TeamDelete` BEFORE running
+`apply_agentteam_plan.py` or `run_loop.sh`. A previous B1/B2/B3 team must never
+remain alive when Phase C or the next B sub-step starts.
 
 ## Required Writes (by `team-leader`)
 
@@ -44,7 +51,9 @@ do not fabricate. When `team-leader` signals `done`, shut the peers down
 orchestrator to disband, and writes the consolidated debate to
 `runtime/debates/<exp_name>.md`: the four JSON sections (Candidate Directions,
 Deduplicated Directions, Selected Direction, Modification Plan) and an
-`## Agent Team Execution Log` naming every agent.
+`## Agent Team Execution Log` naming every agent, recording the 60-second
+polling id/retries, recording polling cancellation, and recording that the
+orchestrator shut down and deleted the team.
 
 ## Apply and Advance (by the main turn)
 

@@ -283,6 +283,7 @@
         "team_leader_finalized",
         "team_disbanded",
         "disbanded_at",
+        "polling",
         "notes"
       ],
       "properties": {
@@ -308,6 +309,9 @@
         "disbanded_at": {
           "type": ["string", "null"]
         },
+        "polling": {
+          "$ref": "#/$defs/team_polling"
+        },
         "notes": {
           "type": "array",
           "items": {
@@ -326,6 +330,7 @@
         "team_leader_finalized",
         "team_disbanded",
         "disbanded_at",
+        "polling",
         "notes"
       ],
       "properties": {
@@ -351,11 +356,59 @@
         "disbanded_at": {
           "type": ["string", "null"]
         },
+        "polling": {
+          "$ref": "#/$defs/team_polling"
+        },
         "notes": {
           "type": "array",
           "items": {
             "type": "string"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "team_polling": {
+      "type": "object",
+      "required": [
+        "poll_interval_seconds",
+        "poll_cron_id",
+        "missing_agent_queries",
+        "polling_cancelled",
+        "polling_cancelled_at"
+      ],
+      "properties": {
+        "poll_interval_seconds": {
+          "type": "integer",
+          "const": 60
+        },
+        "poll_cron_id": {
+          "type": ["string", "null"]
+        },
+        "missing_agent_queries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["agent", "requested_at", "reason"],
+            "properties": {
+              "agent": {
+                "type": "string"
+              },
+              "requested_at": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "polling_cancelled": {
+          "type": "boolean"
+        },
+        "polling_cancelled_at": {
+          "type": ["string", "null"]
         }
       },
       "additionalProperties": false

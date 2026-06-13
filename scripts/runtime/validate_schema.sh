@@ -373,6 +373,14 @@ for file in "${phase_b_refs[@]}"; do
   fi
 done
 
+if grep -Eq "polling_cancelled|poll_interval_seconds|60 seconds|team_disbanded|TeamDelete|shutdown_request" scripts/apply_agentteam_plan.py \
+  && grep -Eq "polling_cancelled|poll_interval_seconds|60 seconds|team_disbanded|TeamDelete|shutdown_request" scripts/apply_f1_review.py; then
+  echo "PASS: apply scripts enforce agent-team polling cancellation and disband evidence"
+else
+  echo "ERROR: apply scripts do not enforce agent-team polling cancellation and disband evidence" >&2
+  exit 1
+fi
+
 for file in "${phase_ef_refs[@]}"; do
   if [[ ! -f "$file" ]]; then
     echo "ERROR: missing file: $file" >&2

@@ -56,6 +56,13 @@ def open_team_lifecycle(required_agents: list[str]) -> dict[str, Any]:
         "team_leader_finalized": False,
         "team_disbanded": False,
         "disbanded_at": None,
+        "polling": {
+            "poll_interval_seconds": 60,
+            "poll_cron_id": None,
+            "missing_agent_queries": [],
+            "polling_cancelled": False,
+            "polling_cancelled_at": None,
+        },
         "notes": [],
     }
 
@@ -68,6 +75,13 @@ def closed_team_lifecycle(required_agents: list[str], timestamp: str, note: str)
         "team_leader_finalized": True,
         "team_disbanded": True,
         "disbanded_at": timestamp,
+        "polling": {
+            "poll_interval_seconds": 60,
+            "poll_cron_id": "agentteam-1min-response-poll",
+            "missing_agent_queries": [],
+            "polling_cancelled": True,
+            "polling_cancelled_at": timestamp,
+        },
         "notes": [note],
     }
 
@@ -227,6 +241,25 @@ def require_execution_log(text: str) -> None:
             + ", ".join(missing)
             + ". Every B1/B2/B3 project agent must be recorded. If their output is "
             "missing, wait and re-invoke them — do not fabricate."
+        )
+
+    required_tokens = {
+        "one-minute polling": ["one-minute", "1-minute", "60-second", "60 seconds", "poll"],
+        "poll cancellation": ["polling_cancelled", "polling cancelled", "cancelled polling", "cancel poll"],
+        "team-leader finalized": ["team_leader_finalized", "team-leader finalized", "finalized"],
+        "team disbanded": ["team_disbanded", "team disbanded", "teamdelete", "shutdown_request"],
+    }
+    missing_tokens = [
+        name
+        for name, options in required_tokens.items()
+        if not any(option in lowered for option in options)
+    ]
+    if missing_tokens:
+        raise SystemExit(
+            "Agent Team Execution Log is missing required lifecycle evidence: "
+            + ", ".join(missing_tokens)
+            + ". team-leader must poll missing agents every 1 minute, cancel polling "
+            "after all conclusions arrive, finalize, and have the team disbanded before applying."
         )
 
 

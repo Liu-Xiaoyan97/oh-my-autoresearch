@@ -28,6 +28,13 @@
         "team_leader_finalized": false,
         "team_disbanded": false,
         "disbanded_at": null,
+        "polling": {
+          "poll_interval_seconds": 60,
+          "poll_cron_id": null,
+          "missing_agent_queries": [],
+          "polling_cancelled": false,
+          "polling_cancelled_at": null
+        },
         "notes": []
       },
       "summary": null,
@@ -51,6 +58,13 @@
         "team_leader_finalized": false,
         "team_disbanded": false,
         "disbanded_at": null,
+        "polling": {
+          "poll_interval_seconds": 60,
+          "poll_cron_id": null,
+          "missing_agent_queries": [],
+          "polling_cancelled": false,
+          "polling_cancelled_at": null
+        },
         "notes": []
       },
       "summary": null,
@@ -78,6 +92,13 @@
         "team_leader_finalized": false,
         "team_disbanded": false,
         "disbanded_at": null,
+        "polling": {
+          "poll_interval_seconds": 60,
+          "poll_cron_id": null,
+          "missing_agent_queries": [],
+          "polling_cancelled": false,
+          "polling_cancelled_at": null
+        },
         "notes": []
       },
       "selected_candidate": null,
@@ -105,6 +126,13 @@
         "team_leader_finalized": false,
         "team_disbanded": false,
         "disbanded_at": null,
+        "polling": {
+          "poll_interval_seconds": 60,
+          "poll_cron_id": null,
+          "missing_agent_queries": [],
+          "polling_cancelled": false,
+          "polling_cancelled_at": null
+        },
         "notes": []
       },
       "summary": null,

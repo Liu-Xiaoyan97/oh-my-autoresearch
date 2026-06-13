@@ -75,6 +75,13 @@ def closed_team_lifecycle(timestamp: str) -> dict[str, Any]:
         "team_leader_finalized": True,
         "team_disbanded": True,
         "disbanded_at": timestamp,
+        "polling": {
+            "poll_interval_seconds": 60,
+            "poll_cron_id": "agentteam-1min-response-poll",
+            "missing_agent_queries": [],
+            "polling_cancelled": True,
+            "polling_cancelled_at": timestamp,
+        },
         "notes": [
             "F1 project-agent team completed, team-leader finalized, and team was disbanded.",
         ],
@@ -131,6 +138,25 @@ def require_execution_log(text: str) -> None:
         raise ValueError(
             "F1 Agent Team Execution Log does not reference required agents: "
             + ", ".join(missing)
+        )
+
+    required_tokens = {
+        "one-minute polling": ["one-minute", "1-minute", "60-second", "60 seconds", "poll"],
+        "poll cancellation": ["polling_cancelled", "polling cancelled", "cancelled polling", "cancel poll"],
+        "team-leader finalized": ["team_leader_finalized", "team-leader finalized", "finalized"],
+        "team disbanded": ["team_disbanded", "team disbanded", "teamdelete", "shutdown_request"],
+    }
+    missing_tokens = [
+        name
+        for name, options in required_tokens.items()
+        if not any(option in lowered for option in options)
+    ]
+    if missing_tokens:
+        raise ValueError(
+            "F1 Agent Team Execution Log is missing required lifecycle evidence: "
+            + ", ".join(missing_tokens)
+            + ". team-leader must poll missing agents every 1 minute, cancel polling "
+            "after all conclusions arrive, finalize, and have the team disbanded before applying."
         )
 
 
