@@ -145,6 +145,9 @@ def require_execution_log(text: str) -> None:
         "poll cancellation": ["polling_cancelled", "polling cancelled", "cancelled polling", "cancel poll"],
         "team-leader finalized": ["team_leader_finalized", "team-leader finalized", "finalized"],
         "team disbanded": ["team_disbanded", "team disbanded", "teamdelete", "shutdown_request"],
+        "structured completion signal": ["[team_complete]", "team_complete"],
+        "session release request": ["release_sessions", "release sessions"],
+        "next command": ["next_command", "next command"],
     }
     missing_tokens = [
         name
@@ -156,7 +159,8 @@ def require_execution_log(text: str) -> None:
             "F1 Agent Team Execution Log is missing required lifecycle evidence: "
             + ", ".join(missing_tokens)
             + ". team-leader must poll missing agents every 1 minute, cancel polling "
-            "after all conclusions arrive, finalize, and have the team disbanded before applying."
+            "after all conclusions arrive, send [TEAM_COMPLETE] with RELEASE_SESSIONS "
+            "and NEXT_COMMAND, and have the team disbanded before applying."
         )
 
 

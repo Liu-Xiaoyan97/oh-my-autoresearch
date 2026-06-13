@@ -30,7 +30,10 @@ bounded during a long continuous run. A mid-loop compaction is safe — re-read
 runtime/state and continue.
 
 For per-iteration fresh contexts with no compaction at all, run
-`./scripts/loop_forever.sh` from a terminal: it sets `AUTORESEARCH_STOP_AT_A=1`
-and starts a fresh `claude` process per iteration.
+`./scripts/loop_forever.sh` from a terminal: it sets
+`AUTORESEARCH_FORCE_CONTINUE=1` and `AUTORESEARCH_STOP_AT_A=1`, then starts a
+fresh `claude` process per iteration. Ordinary in-process CLI usage does not set
+`AUTORESEARCH_FORCE_CONTINUE`; there the Stop hook stays non-coercive and
+AgentTeam phases advance through the `[TEAM_COMPLETE]` message's `NEXT_COMMAND`.
 
 Do not ask the user before advancing from one successful phase to the next.

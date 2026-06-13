@@ -7,23 +7,18 @@ import sys
 from pathlib import Path
 
 
-# Phases that must keep running within the SAME session (the Stop hook blocks
-# stopping there and forces the loop to continue).
+# By default this hook is advisory: it allows the main session to stop. The
+# AutoResearch loop is driven by explicit commands sent through the AgentTeam
+# protocol, not by Stop-hook coercion. This matters for in-process AgentTeam
+# mode: forcing the main turn to continue after a team finishes can keep old
+# team/task metadata rendered in the CLI panel and wastes context.
 #
-# DEFAULT = continuous in-CLI run: the whole A..F loop runs in ONE session and
-# keeps going across iterations; it stops only at BLOCKED or DONE. Context is
-# bounded by Claude Code auto-compact, which fires automatically once usage
-# crosses the threshold. NOTE: the default 95%-of-1M threshold is far too high
-# to ever fire usefully — this deployment lowers it via env in
-# .claude/settings.json (CLAUDE_CODE_AUTO_COMPACT_WINDOW + AUTOCOMPACT_PCT) so
-# compaction actually triggers mid-loop. (No hook can trigger /compact itself;
-# the threshold env vars are the real lever.)
-#
-# Opt-in boundary mode: set AUTORESEARCH_STOP_AT_A=1 (scripts/loop_forever.sh
-# does this) to allow stopping at the Phase A boundary, so an external driver can
-# start each iteration in a fresh process. runtime/ is the source of truth, so
-# resuming after any stop/compaction is safe.
+# Opt-in force mode: set AUTORESEARCH_FORCE_CONTINUE=1 when you intentionally
+# want the old "do not stop mid-loop" behavior. scripts/loop_forever.sh sets
+# this flag for unattended driver sessions and also sets AUTORESEARCH_STOP_AT_A=1
+# so each spawned session may stop at the next Phase A boundary.
 CONTINUE_PHASES = {"B", "C", "D", "E", "F"}
+_FORCE_CONTINUE = os.environ.get("AUTORESEARCH_FORCE_CONTINUE") == "1"
 _STOP_AT_A = os.environ.get("AUTORESEARCH_STOP_AT_A") == "1"
 if not _STOP_AT_A:
     CONTINUE_PHASES = CONTINUE_PHASES | {"A"}
@@ -50,6 +45,9 @@ def main() -> int:
     except (json.JSONDecodeError, Exception):
         pass
     # ---- end subagent detection ----
+
+    if not _FORCE_CONTINUE:
+        return 0
 
     root = Path(__file__).resolve().parents[2]
     state_path = root / "runtime/state/state.json"

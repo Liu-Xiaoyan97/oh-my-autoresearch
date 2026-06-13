@@ -303,9 +303,18 @@ project agents and record their outputs before writing the F1 verdict.
 The orchestrator (main turn) `TeamCreate`s one team and spawns `team-leader`
 TOGETHER WITH the specialists as PEERS (background). The specialists
 `SendMessage` their full conclusions DIRECTLY to `team-leader`, which alone
-reconciles and writes this review, then signals the orchestrator to disband. No
-agent spawns another agent (no nesting); the debate content never enters the
-main turn.
+reconciles and writes this review, then sends the orchestrator a structured
+`[TEAM_COMPLETE]` signal with `TEAM_NAME`, `PHASE_STEP`, `RELEASE_SESSIONS:
+true`, `TEARDOWN_REQUIRED`, and `NEXT_COMMAND`. No agent spawns another agent
+(no nesting); the debate content never enters the main turn.
+
+After `[TEAM_COMPLETE]`, the main turn must release the team before applying:
+send `shutdown_request` to every member listed in
+`~/.claude/teams/<team>/config.json` (including `team-leader`), ping-confirm
+exit, call `TeamDelete`, and verify `~/.claude/teams/<team>/` plus
+`~/.claude/tasks/<team>/` are gone. In in-process mode, stale metadata keeps the
+agent visible in the CLI panel; remove those two directories after shutdown and
+`TeamDelete` if they still exist. Only then run `NEXT_COMMAND`.
 
 1. `math-theorist` (peer; DMs `team-leader`)
 2. `numerical-debugger` (peer; DMs `team-leader`)
@@ -372,6 +381,9 @@ cd /Users/liuxiaoyan/workspace/research-runtime
 ./scripts/apply_f1_review.py
 ./scripts/run_loop.sh
 ```
+
+Run those commands only after the `[TEAM_COMPLETE]` teardown has made the F1
+team disappear from the CLI panel/session list.
 """
         review_path.write_text(review_text, encoding="utf-8")
         timeline.setdefault("events", []).append({
@@ -404,8 +416,8 @@ cd /Users/liuxiaoyan/workspace/research-runtime
     print("== Phase F/F1: Waiting for AgentTeam Evidence Review ==")
     print(f"exp_name: {exp_name}")
     print(f"review_path: {review_path}")
-    print("F1 requires every project agent to finish and the team-leader to finalize and disband the team.")
-    print("Fill runtime/state/current_iteration.json with the F1 review, then rerun ./scripts/run_loop.sh.")
+    print("F1 requires every project agent to finish and team-leader to send [TEAM_COMPLETE].")
+    print("Release all team sessions/metadata, then run apply_f1_review.py and run_loop.sh.")
     raise SystemExit(0)
 
 print("== Phase F: Checkpoint Write ==")

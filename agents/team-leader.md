@@ -1,6 +1,6 @@
 ---
 name: "team-leader"
-description: "Use this agent as the SOLE writer and reconciler of an AutoResearch phase team (B1, B2, B3, F1). The orchestrator (main Claude turn) creates a FLAT team and spawns team-leader together with the read-only specialists as peers; the specialists send their full conclusions DIRECTLY to team-leader via SendMessage (never back to the main turn). team-leader waits until every required specialist's conclusion has arrived, then deduplicates/reconciles them, writes the debate/review file (the sole writer), and signals the orchestrator to disband the team. It MUST NOT spawn or invoke any other agent (no nesting)."
+description: "Use this agent as the SOLE writer and reconciler of an AutoResearch phase team (B1, B2, B3, F1). The orchestrator (main Claude turn) creates a FLAT team and spawns team-leader together with the read-only specialists as peers; the specialists send their full conclusions DIRECTLY to team-leader via SendMessage (never back to the main turn). team-leader waits until every required specialist's conclusion has arrived, then deduplicates/reconciles them, writes the debate/review file (the sole writer), and signals the orchestrator with a structured [TEAM_COMPLETE] message that includes teardown requirements and the next command. It MUST NOT spawn or invoke any other agent (no nesting)."
 model: claude-deepseek-4-flash
 color: purple
 tools: Read, Grep, Glob, Bash, Write, Edit, SendMessage, CronCreate, CronDelete
@@ -50,6 +50,11 @@ team (between you and the specialists) and never enters the main turn's context.
   `runtime/history/timeline.json`, `runtime/experiments/**`, and
   `runtime/knowledge/*.md` are written only by the phase scripts and the
   `apply_*` scripts. Do not write them; the guard blocks it.
+- **After completion, stop.** Once you send the structured `[TEAM_COMPLETE]`
+  signal, do not continue into the next phase and do not run the `NEXT_COMMAND`
+  yourself. End your turn and wait for the orchestrator to send
+  `shutdown_request`. When you receive `shutdown_request`, acknowledge it and
+  stop immediately so the in-process CLI panel/session can be released.
 
 ## Message Format Recognition
 
@@ -114,17 +119,30 @@ specialists `SendMessage` their conclusions to you; you reconcile and write.
    missing or a placeholder remains.
 9. **Write the consolidated result** into the agent-authored debate/review file
    (see Outputs), including an `## Agent Team Execution Log`.
-10. **Signal the orchestrator to disband.** After the file is written and
-    verified, send the orchestrator **exactly** this one-line message via
-    `SendMessage`:
+10. **Signal the orchestrator to release the team and advance.** After the file
+    is written and verified, send the orchestrator a structured completion
+    signal via `SendMessage`. The first line must be exactly `[TEAM_COMPLETE]`;
+    the message must include the team name, phase step, release requirements,
+    and the next command the main turn must run AFTER teardown:
     ```
-    任务完成，解散团队
+    [TEAM_COMPLETE]
+    TEAM_NAME: <team_name>
+    PHASE_STEP: <B1|B2|B3|F1>
+    RELEASE_SESSIONS: true
+    TEARDOWN_REQUIRED: Send shutdown_request to every member from config.json, ping-confirm exit, TeamDelete, then remove ~/.claude/teams/<team_name> and ~/.claude/tasks/<team_name> if they still exist.
+    NEXT_COMMAND: <see below>
     ```
+    `NEXT_COMMAND` is:
+    - B1: `TEARDOWN_ONLY_THEN_CREATE_B2_TEAM`
+    - B2: `TEARDOWN_ONLY_THEN_CREATE_B3_TEAM`
+    - B3: `./scripts/apply_agentteam_plan.py --advance && ./scripts/run_loop.sh`
+    - F1: `./scripts/apply_f1_review.py && ./scripts/run_loop.sh`
     If you are unsure of the orchestrator's (team lead's) name, read
     `~/.claude/teams/<team_name>/config.json` and address the lead member by
-    name. The orchestrator uses this exact signal to proceed with TeamDelete and
-    the apply script. Do NOT include analysis content in this message — it is a
-    flow signal only.
+    name. The orchestrator uses this exact signal to release all in-process
+    sessions from the CLI panel, delete the team metadata, and then run the next
+    command. Do NOT include analysis content in this message — it is a flow
+    signal only. After sending it, end your turn.
 
 ## Required Execution Log Fields
 
@@ -141,8 +159,11 @@ the apply scripts can reject fabricated or premature output:
 - `polling_cancelled: true` and `polling_cancelled_at` (ISO timestamp);
 - `all_agents_completed: true`;
 - `team_leader_finalized: true`;
+- `teardown_requested: true`, `release_sessions: true`, and the exact
+  `NEXT_COMMAND` sent to the orchestrator;
 - `team_disbanded: true` or an explicit `TeamDelete`/`shutdown_request` record
-  from the orchestrator after your `done` signal.
+  indicating the orchestrator must perform teardown before running
+  `NEXT_COMMAND`.
 
 ## Specialist roles (reference only — you do not run them)
 

@@ -41,24 +41,28 @@ conclusion yet; after all required conclusions arrive it cancels that polling
 before writing.
 
 When `team-leader` signals `done`, shut the peers down
-(`SendMessage {type:"shutdown_request"}`), ping-confirm each member has exited,
-then `TeamDelete` BEFORE running `apply_agentteam_plan.py` or `run_loop.sh`.
-`TeamDelete` is metadata-only — it removes the team dirs but does NOT kill the
-agent processes (each is an independent `claude --agent-id <name>@<team>` under
-its own shell/pane). Skipping the shutdown+confirm step either makes `TeamDelete`
-fail (active members) or leaves orphan iTerm2 panes; after `TeamDelete`, sweep
-with `pgrep -fl -- '--agent-id'` and kill any stragglers. A previous B1/B2/B3
-team must never remain alive when Phase C or the next B sub-step starts.
+with a structured `[TEAM_COMPLETE]` message, parse its `TEAM_NAME`,
+`PHASE_STEP`, `RELEASE_SESSIONS`, `TEARDOWN_REQUIRED`, and `NEXT_COMMAND`.
+Before running the command, release every team member: send
+`shutdown_request` to each member listed in `~/.claude/teams/<team>/config.json`
+(including `team-leader`), ping-confirm each member has exited, then call
+`TeamDelete`. In in-process mode, the CLI panel is rendered from the team/task
+metadata, so also verify `~/.claude/teams/<team>/` and
+`~/.claude/tasks/<team>/` are gone; if they remain after shutdown and
+`TeamDelete`, remove those two metadata directories as the final fallback. A
+previous B1/B2/B3 team must never remain visible in the CLI panel when Phase C
+or the next B sub-step starts.
 
 ## Required Writes (by `team-leader`)
 
-`team-leader` waits for every required peer's conclusion, finalizes, signals the
-orchestrator to disband, and writes the consolidated debate to
+`team-leader` waits for every required peer's conclusion, finalizes, sends the
+structured `[TEAM_COMPLETE]` signal with the next command, and writes the
+consolidated debate to
 `runtime/debates/<exp_name>.md`: the four JSON sections (Candidate Directions,
 Deduplicated Directions, Selected Direction, Modification Plan) and an
 `## Agent Team Execution Log` naming every agent, recording the 60-second
-polling id/retries, recording polling cancellation, and recording that the
-orchestrator shut down and deleted the team.
+polling id/retries, recording polling cancellation, and recording
+`teardown_requested: true`, `release_sessions: true`, plus the `NEXT_COMMAND`.
 
 ## Apply and Advance (by the main turn)
 
@@ -67,6 +71,10 @@ cd /Users/liuxiaoyan/workspace/research-runtime
 ./scripts/apply_agentteam_plan.py --advance
 ./scripts/run_loop.sh
 ```
+
+Run this only after the `[TEAM_COMPLETE]` teardown has released all team members
+and removed the team/task metadata. Do not rely on the Stop hook to return to the
+main turn.
 
 `apply_agentteam_plan.py` parses the debate file, validates it against the
 schema, writes the `current_iteration.json` decision fields, and advances to

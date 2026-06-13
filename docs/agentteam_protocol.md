@@ -42,24 +42,40 @@ as a received conclusion.
   specialists are still missing, and sends a brief reminder via `SendMessage`
   ONLY to missing specialists. Reminders are sent through the cron trigger only
   — NOT on every message receipt.
-- **The orchestrator** (main Claude turn) creates a 120-second recurring cron
-  (`1-59/2 * * * *`) after spawning all peers. The cron sends a progress query
-  to `team-leader` ("进度查询: ..."). The orchestrator does NOT communicate
-  with any other team member.
-- All cron jobs MUST be cancelled (`CronDelete`) before team disband.
+- The orchestrator does NOT create a default recurring monitor cron in
+  in-process mode. It waits for `team-leader` to send `[TEAM_COMPLETE]`, then
+  performs teardown synchronously and runs the included `NEXT_COMMAND`.
+- All `team-leader` polling cron jobs MUST be cancelled (`CronDelete`) before
+  `[TEAM_COMPLETE]` is sent.
 
 ### Team Uniqueness
 
 Only ONE team may exist per phase step. The orchestrator MUST verify no active
-team exists before creating a new one. After receiving the signal, the
-orchestrator MUST cancel its monitoring cron, send `shutdown_request` to all
-members, and `TeamDelete` before advancing.
+team exists before creating a new one. After receiving `[TEAM_COMPLETE]`, the
+orchestrator MUST send `shutdown_request` to every member from
+`~/.claude/teams/<team>/config.json` (including `team-leader`), ping-confirm exit,
+call `TeamDelete`, and verify `~/.claude/teams/<team>/` plus
+`~/.claude/tasks/<team>/` are gone before advancing. In in-process mode, any
+remaining metadata directory keeps the old agent visible in the CLI panel, so
+the final fallback is to remove those two directories after shutdown/TeamDelete.
 
 ### Completion Signal
 
-`team-leader` signals completion by sending `"任务完成，解散团队"` via
-`SendMessage` to the orchestrator. This is the ONLY signal the orchestrator
-uses to determine readiness to advance.
+`team-leader` signals completion by sending a structured message via
+`SendMessage` to the orchestrator. The first line MUST be `[TEAM_COMPLETE]`:
+
+```text
+[TEAM_COMPLETE]
+TEAM_NAME: <team_name>
+PHASE_STEP: <B1|B2|B3|F1>
+RELEASE_SESSIONS: true
+TEARDOWN_REQUIRED: Send shutdown_request to every member, ping-confirm exit, TeamDelete, and remove stale team/task metadata if still present.
+NEXT_COMMAND: <command-or-next-team-action>
+```
+
+This is the ONLY signal the orchestrator uses to determine readiness to advance.
+The orchestrator must run `NEXT_COMMAND` only after teardown has removed the
+team from the CLI panel/session list.
 
 ## Phase Ownership
 

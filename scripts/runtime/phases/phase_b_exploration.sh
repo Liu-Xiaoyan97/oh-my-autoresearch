@@ -354,7 +354,9 @@ Generate candidate architecture modifications for `project/nn-architecture`.
 Use a FLAT PEER AgentTeam. The orchestrator (main turn) `TeamCreate`s one team
 and spawns `team-leader` TOGETHER WITH the specialists as PEERS (background); the
 specialists `SendMessage` their full conclusions DIRECTLY to `team-leader`, which
-alone reconciles and writes this file, then signals the orchestrator to disband.
+alone reconciles and writes this file, then sends the orchestrator a structured
+`[TEAM_COMPLETE]` signal with `TEAM_NAME`, `PHASE_STEP`, `RELEASE_SESSIONS:
+true`, `TEARDOWN_REQUIRED`, and `NEXT_COMMAND`.
 No agent spawns another agent (no nesting): `team-leader` has no agent-spawning
 tool, and the orchestrator does not route specialist content through itself. The
 debate content stays inside the team and never enters the main turn.
@@ -369,8 +371,14 @@ debate content stays inside the team and never enters the main turn.
 
 The main Claude turn must not manually replace the project-agent discussion, and
 must not absorb the debate content. Spawn the named peer agents, let
-`team-leader` record the consolidated outputs in this file, and only then apply
-the plan via `./scripts/apply_agentteam_plan.py --advance`.
+`team-leader` record the consolidated outputs in this file, then wait for
+`[TEAM_COMPLETE]`. Before running `NEXT_COMMAND`, the main turn must release the
+team: send `shutdown_request` to every member listed in
+`~/.claude/teams/<team>/config.json` (including `team-leader`), ping-confirm
+exit, call `TeamDelete`, and verify `~/.claude/teams/<team>/` plus
+`~/.claude/tasks/<team>/` are gone. In in-process mode, stale metadata keeps the
+agent visible in the CLI panel; remove those two directories after shutdown and
+`TeamDelete` if they still exist.
 
 The team must produce:
 
@@ -421,9 +429,11 @@ Write the debate summary here.
 Record which project agents were invoked for B1, B2, and B3. Include minority
 objections and the team-leader reconciliation decision for each step. The
 team-leader must wait for every required agent to finish, then explicitly
-finalize and disband the team. Do not advance to Phase C until
+finalize and send `[TEAM_COMPLETE]`. Do not advance to Phase C until
 `team_lifecycle.all_agents_completed`, `team_lifecycle.team_leader_finalized`,
-and `team_lifecycle.team_disbanded` are all true for B1, B2, and B3.
+and `team_lifecycle.team_disbanded` are all true for B1, B2, and B3. The log
+must also include `teardown_requested: true`, `release_sessions: true`, and the
+`NEXT_COMMAND` sent to the orchestrator.
 
 ## Selected Direction
 
@@ -453,6 +463,9 @@ cd /Users/liuxiaoyan/workspace/research-runtime
 ./scripts/apply_agentteam_plan.py --advance
 ./scripts/run_loop.sh
 ```
+
+Run those commands only after the `[TEAM_COMPLETE]` teardown has made the team
+disappear from the CLI panel/session list.
 
 Do not hand-edit `runtime/state/current_iteration.json` or run
 `./scripts/set_phase.sh` to jump ahead — the PreToolUse guard blocks the former
@@ -534,7 +547,8 @@ if phase_step == "B2":
         print("AgentTeam output is not ready.")
         print("B1, B2, and B3 must all have status=complete, exact completed_agents,")
         print("all_agents_completed=true, team_leader_finalized=true, and team_disbanded=true.")
-        print("The team-leader must explicitly finalize and disband the team before Phase C.")
+        print("The team-leader must send [TEAM_COMPLETE], and the orchestrator must")
+        print("release all team sessions/metadata before Phase C.")
         raise SystemExit(0)
 
     state.update({

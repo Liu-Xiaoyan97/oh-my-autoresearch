@@ -10,18 +10,22 @@ advance the loop by running:
 ```
 
 After any phase finishes, immediately inspect `runtime/state/state.json` and
-continue with `./scripts/run_loop.sh`. Do not stop after a single phase. Continue
-until the state is `BLOCKED` or `DONE`.
+continue with `./scripts/run_loop.sh`, unless you are waiting for an AgentTeam
+completion signal. AgentTeam phases advance by an explicit `[TEAM_COMPLETE]`
+message from `team-leader`; that message includes the `NEXT_COMMAND` the main
+turn must run after teardown. Continue until the state is `BLOCKED` or `DONE`.
 
 Context management:
 
-- **Default — one continuous in-CLI session, bounded by auto-compact.** The whole
-  A..F loop runs in a single session and keeps going across iterations; it stops
-  only at `BLOCKED`/`DONE`. Claude Code auto-compact fires automatically when
-  context crosses the threshold and the loop continues afterward (runtime/ is the
-  source of truth, so a mid-loop compaction is safe). The default ~95%-of-1M
-  threshold is too high to ever fire usefully, so this deployment lowers it via
-  `env` in `.claude/settings.json`:
+- **Default — explicit in-process continuation.** The Stop hook is non-coercive
+  by default: it does not force the main turn to keep running. Continue by
+  running the explicit commands produced by the phase scripts or by the
+  AgentTeam `[TEAM_COMPLETE]` signal. This prevents the Stop hook from dragging
+  the main turn forward while old in-process team sessions are still being
+  released. Claude Code auto-compact still fires automatically when context
+  crosses the threshold (runtime/ is the source of truth, so a mid-loop
+  compaction is safe). The default ~95%-of-1M threshold is too high to ever fire
+  usefully, so this deployment lowers it via `env` in `.claude/settings.json`:
   - `CLAUDE_CODE_AUTO_COMPACT_WINDOW` — effective window for the calc (e.g. 300000)
   - `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` — percent of that window (e.g. 70)
   → compaction triggers around `window × pct` tokens. **Env changes apply only to
@@ -30,9 +34,11 @@ Context management:
   often, higher to keep more context; `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` reverts
   to a 200k window.
 - **Unattended driver / per-iteration fresh context**: run
-  `./scripts/loop_forever.sh`. It sets `AUTORESEARCH_STOP_AT_A=1` so the Stop hook
-  stops each session at the Phase A boundary and the driver starts the next
-  iteration in a fresh `claude` process (no compaction needed at all).
+  `./scripts/loop_forever.sh`. It sets `AUTORESEARCH_FORCE_CONTINUE=1` and
+  `AUTORESEARCH_STOP_AT_A=1` so the Stop hook is used only inside driver-spawned
+  sessions: it blocks mid-iteration stops, then allows stopping at the Phase A
+  boundary so the driver can start the next iteration in a fresh `claude`
+  process (no compaction needed at all).
 
 Human intervention is required when the state is `BLOCKED`, when the state is
 `DONE`, or when a command fails in a way the workflow cannot repair.
@@ -226,141 +232,49 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
    `run_in_background: true` so their output does NOT return into the main turn:
    - `team-leader` (`subagent_type: team-leader`, `name: "team-leader"`) — tell
      it which specialists to wait for this step and to write the debate file
-     once all their conclusions arrive, then `SendMessage` the orchestrator
-     the signal `"任务完成，解散团队"`.
+     once all their conclusions arrive, then `SendMessage` the orchestrator the
+     structured `[TEAM_COMPLETE]` signal with `TEAM_NAME`, `PHASE_STEP`,
+     `RELEASE_SESSIONS: true`, `TEARDOWN_REQUIRED`, and `NEXT_COMMAND`.
    - each required specialist (`subagent_type` = its name, same `name`) — tell it
      to `SendMessage` its FULL conclusions to `team-leader` with the
      `[CONCLUSION] <agent-name>` format as the first line, and to return only a
      one-line ack to the orchestrator (no analysis content).
 
-4. **创建主程序 cron 监控。** 在所有 peers 启动完毕后，立即创建一个 cron 任务
-   用于监控 team 进度。**Cron 的职责仅是监控和发信号，不执行 shutdown、
-   TeamDelete 或 phase 推进——这些由主程序在确认标记后负责。**
-   使用 `CronCreate`：
-   - `cron`: `1-59/2 * * * *`（每 2 分钟/120 秒，带偏移避免 :00/:30 拥堵）
-   - `recurring`: true
-   - 记录返回的 cron job ID（下文 prompt 中用 `<本cron_id>` 引用）。
-   - `prompt`：
-
-   ```
-   你是 Phase B AgentTeam 的监控 cron。**你的职责仅是监控和发信号，
-   不执行 shutdown、TeamDelete 或 phase 推进。这些由主程序负责。**
-
-   ## 阶段 0：快速退出（已有待处理信号）
-   1. 检查 `runtime/state/.cron_team_completed` 或
-      `runtime/state/.cron_team_recreate` 是否存在。
-      若任一存在 → 主程序尚未处理该信号，无需再监控。直接结束本次触发。
-
-   ## 阶段 1：阶段校验（Phase Validation）
-   1. 读取 `runtime/state/state.json`，记录当前 `phase`。
-   2. 列出 `~/.claude/teams/` 下所有 team 目录。
-   3. 确定当前阶段对应的预期 team 名称前缀：
-      - Phase B 的子步骤（B1/B2/B3）→ team 名称以 `phaseB` 开头
-      - Phase F1 → team 名称以 `phaseF1` 开头
-   4. 对于每个 team 目录：
-      - 若名称前缀不匹配当前阶段 → 陈旧 team（很可能是会话边界前遗留的孤儿，
-        `TeamDelete` 会对它 no-op，必须用目录判据 + rm 兜底）
-      - 对陈旧 team 执行主程序文档末尾的「团队拆除标准动作（TEARDOWN）」：
-        逐成员 `shutdown_request` → ping 确认 → `TeamDelete` → 以
-        `~/.claude/teams/<team>/`、`~/.claude/tasks/<team>/` 目录消失为判据，
-        仍残留则 `pgrep` 确认无进程后 `rm -rf` 兜底删除。
-   5. 简要记录清理结果。
-
-   ## 阶段 2：进度查询（保持耐心，不急于重启）
-   1. 向 `team-leader` 发送进度查询：
-      `SendMessage` to `"team-leader"` 内容：
-      "请列出：(1) 已回传 [CONCLUSION] 的 agent 名称；
-       (2) 尚未回传的 required agent 名称；
-       (3) 你是否仍在等待。"
-   2. 等待 team-leader 回复（60 秒内），无论是否回复都进入阶段 3——
-      **在 20 分钟预算内不要因一次未回复就重启 team-leader 或重建 team**
-      （保持耐心）。是否需要恢复，统一在阶段 3 按耗时判定。
-
-   ## 阶段 3：完成检测 / 20 分钟超时恢复
-   1. 若 team-leader 回复了 "任务完成，解散团队" 信号：
-      **只创建标记文件，不做清理！**
-      用 Write 工具创建 `runtime/state/.cron_team_completed`
-      （内容为 team-leader 的完成消息原文）。本次结束。
-
-   2. 否则计算耗时 = 现在 − max(team 创建时间, 上次重启时间)。
-      上次重启时间读取 `runtime/state/.cron_patience_reset_at`（若不存在则用
-      team 创建时间，取自 `~/.claude/teams/<team>/config.json`）。
-      - **耗时 ≤ 20 分钟** → 保持耐心，本次结束，等待下次 cron 触发。
-      - **耗时 > 20 分钟（超时恢复）**：
-        a. 向 team-leader 发送重启询问：
-           `SendMessage` to `"team-leader"` 内容：
-           "已超过 20 分钟。请仅回复需要重启的 agent 名称列表（未回传
-            [CONCLUSION] 或疑似卡死的）；若一切正常仍在推进，回复 '无'。"
-        b. **team-leader 在 90 秒内应答**（team-leader 还活着）：
-           - 对它点名的每个 agent，用 Agent 工具重新 spawn（相同 name、
-             subagent_type、team_name），告知其重新发送 [CONCLUSION] 给
-             team-leader。**team-leader 还在，绝不新建 team、绝不 TeamDelete。**
-           - 用 Write 更新 `runtime/state/.cron_patience_reset_at` 为当前 ISO
-             时间（重置 20 分钟预算，给恢复后的 team 新的耐心窗口）。
-           - 简要记录重启了哪些 agent。本次结束。
-        c. **team-leader 90 秒内无应答**（视为 team-leader 已崩溃）：
-           - **不要自行 TeamDelete 或重启 team-leader。** 用 Write 工具创建
-             `runtime/state/.cron_team_recreate`（内容："team-leader 无应答超过
-             90 秒，需清空并重建 team"）。清空与重建由主程序执行。本次结束。
-   ```
+4. **主程序不创建常驻监控 cron。** in-process 模式下，team 面板/session 的生命
+   周期必须由完成信号后的同步 teardown 驱动；不要再依赖 Stop hook 或主程序
+   监控 cron 把流程强行拉回主 turn。`team-leader` 自己已经有 60 秒 polling
+   cron，会催促未回传的 specialist，并在全部完成后取消该 cron。
 
 5. **主程序只与 team-leader 通讯。** 主程序（编排者）在任何时候都**不得**直接
    向 team 中的其他 agent（math-theorist、numerical-debugger、flow-arch-reviewer、
    orthogonal-direction-scout）发送消息或接收其分析内容。所有 team 内部通讯
-   仅发生在 team-leader 与各 specialist 之间。主程序的 cron 监控执行上述
-   增强 prompt——由 cron 自行查询 team-leader 和重启 agent，主程序不参与。
+   仅发生在 team-leader 与各 specialist 之间。唯一例外是 teardown：收到
+   `[TEAM_COMPLETE]` 后，主程序必须按 team config 中的成员名单向每个成员发送
+   `shutdown_request`，这不是分析通讯，而是 session 释放协议。
 
 6. **`team-leader` 内部机制。** `team-leader` 在启动时创建自己的 60 秒轮询
    cron（使用 `CronCreate`），在 cron 触发时检查缺失的 specialist 并发送
    提醒。所有 specialist 回传 `[CONCLUSION]` 后，`team-leader` 取消轮询 cron
-   （`CronDelete`），整理写入 debate 文件，然后向主程序发送
-   `"任务完成，解散团队"`。
+   （`CronDelete`），整理写入 debate 文件，然后向主程序发送 `[TEAM_COMPLETE]`
+   消息，里面包含 `NEXT_COMMAND`。
 
-7. **主程序在每轮检查标记并执行清理。** 由于 stop hook 不再豁免主程序
-   （phase=B 会阻止退出），主程序会持续循环。每次进入 Phase B 的 turn 中，
-   主程序必须：
+7. **主程序收到 `[TEAM_COMPLETE]` 后同步清理并推进。** 不写
+   `.cron_team_completed`，不等待 Stop hook 重新唤醒自己。主程序必须：
 
-   1. 检查 `runtime/state/.cron_team_completed` 与
-      `runtime/state/.cron_team_recreate` 是否存在
-
-   2. **若 `.cron_team_completed` 存在** → team 已正常完成（team-leader 发出了
-      "任务完成，解散团队"）：
-      a. **执行本节末尾的「团队拆除标准动作（TEARDOWN）」**，并以
-         `~/.claude/teams/<team_name>/` 与 `~/.claude/tasks/<team_name>/`
-         两个目录**均已消失**作为拆除成功的判据（不要以 `TeamDelete` 的返回值
-         为准——它可能 no-op）。
-      b. 删除 `runtime/state/.cron_team_completed`，并清理本阶段的恢复状态文件
-         `runtime/state/.cron_patience_reset_at` 与
-         `runtime/state/.cron_recreate_count`（若存在）
-      c. 运行 `./scripts/apply_agentteam_plan.py --advance`
-      d. 运行 `./scripts/run_loop.sh`
-
-   3. **若 `.cron_team_recreate` 存在** → cron 判定 team-leader 已崩溃（无应答），
-      需清空并重建整个 team。**这是唯一允许重建 team 的入口——前提是 team-leader
-      已确认失联；只要 team-leader 还能应答就绝不走到这里。**
-      a. **重建上限保护**：读取 `runtime/state/.cron_recreate_count`（不存在视为
-         0）。若已 ≥ 2 → 重建两次仍失败，运行
-         `./scripts/set_phase.sh BLOCKED C1`，
-         block_reason="AgentTeam 反复重建仍失败：team-leader 多次崩溃"；删除
-         `.cron_team_recreate`、`.cron_patience_reset_at`、`.cron_recreate_count`
-         后运行 `./scripts/run_loop.sh`，本 turn 结束。
-      b. 否则**清空旧 team**：执行本节末尾的「团队拆除标准动作（TEARDOWN）」，
-         以 `~/.claude/teams/<team_name>/` 与 `~/.claude/tasks/<team_name>/`
-         两个目录均已消失为判据。
-      c. 删除 `runtime/state/.cron_team_recreate` 与
-         `runtime/state/.cron_patience_reset_at`（若存在）；把
-         `runtime/state/.cron_recreate_count` 自增 1 写回。
-      d. **重建 team**：按本节步骤 2–4 重新 `TeamCreate`（沿用同一 team 名）+
-         spawn `team-leader` 与本步骤所需 specialists + 新建监控 cron。
-      e. 本 turn 结束——不推进 phase，等待新 team 完成。
-
-   4. **若两个标记都不存在** → team 仍在进行中（耐心等待，预算 20 分钟）：
-      a. 检查 cron 是否仍在活跃（`CronList`）
-      b. 若 cron 不存在或已失效 → 重新创建 cron（同步骤 4）
-      c. 若 cron 存在 → **不做任何操作，直接结束本 turn。**
-         Cron 每 2 分钟自行查询 team-leader 进度，并在超过 20 分钟时按"询问
-         team-leader 重启哪些 agent / team-leader 无应答则发重建信号"恢复，
-         主程序无需重复查询。
+   a. 解析 `TEAM_NAME`、`PHASE_STEP`、`RELEASE_SESSIONS`、`TEARDOWN_REQUIRED`、
+      `NEXT_COMMAND`。若缺任一字段，视为无效完成信号，要求 team-leader 重发。
+   b. 执行本节末尾的「团队拆除标准动作（TEARDOWN）」；尤其在 in-process
+      模式下，必须确认 `~/.claude/teams/<team_name>/` 与
+      `~/.claude/tasks/<team_name>/` 两个目录均已消失，否则 CLI 面板仍会显示
+      已取消的 agent。
+   c. teardown 成功后，若 `NEXT_COMMAND` 为
+      `TEARDOWN_ONLY_THEN_CREATE_B2_TEAM` 或
+      `TEARDOWN_ONLY_THEN_CREATE_B3_TEAM`，立即创建下一 B 子步骤的全新 team。
+      上一 team 的任何 member 都不得复用或继续存在。
+   d. teardown 成功后，若 `NEXT_COMMAND` 是 shell 命令，则从仓库根目录运行该
+      命令。例如 B3 后运行
+      `./scripts/apply_agentteam_plan.py --advance && ./scripts/run_loop.sh`；
+      F1 后运行 `./scripts/apply_f1_review.py && ./scripts/run_loop.sh`。
 
 > **团队拆除标准动作（TEARDOWN）。** 拆除一个 team 必须按下列顺序，**判据是
 > 磁盘上的 team/task 目录消失，而不是 `TeamDelete` 的返回值**：
@@ -476,31 +390,22 @@ Compare current experiment results against `runtime/experiments/best.json`.
 - `phase_f_checkpoint.sh` updates `runtime/experiments/best.json` if the primary
   metric improved.
 - Run F1 AgentTeam root cause analysis as a FLAT PEER TEAM (same topology as
-  Phase B): the orchestrator uses the **same protocols as Phase B**（包括
-  增强版 cron prompt 中的阶段校验、Agent 异常恢复、完成检测三步流程，
-  cron 只发信号不清理，主程序负责按「团队拆除标准动作（TEARDOWN）」清理：
-  shutdown + confirm + TeamDelete + 目录消失判据 + rm 兜底）：
+  Phase B): the orchestrator uses the **same in-process completion protocol as
+  Phase B**（team-leader 自己 60 秒 polling；完成后发送 `[TEAM_COMPLETE]`
+  + `NEXT_COMMAND`；主程序先按「团队拆除标准动作（TEARDOWN）」释放 session
+  / 删除 team metadata，再执行命令）：
   1. **检查 team 唯一性**（一个阶段只有一个 team）
   2. `TeamCreate` a team (e.g. `phaseF1-<exp_name>`)
   3. Spawn `team-leader` together with the read-only specialists
      `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` as PEERS,
      in the background. Specialists `SendMessage` `[CONCLUSION]` to
      `team-leader`; main turn only receives one-line acks.
-  4. **创建主程序 cron 监控**（使用与 Phase B 相同的增强 prompt 模板，
-     包含阶段校验 + 进度查询 + 20 分钟超时恢复三阶段，**同样保持 20 分钟耐心
-     预算**：超时先问 team-leader 重启哪些 agent，team-leader 无应答才写
-     `.cron_team_recreate` 让主程序清空+重建。注意：F1 的 apply 脚本是
-     `./scripts/apply_f1_review.py` 而非 `--advance`；标记文件同为
-     `runtime/state/.cron_team_completed` 与 `runtime/state/.cron_team_recreate`）
-  5. **主程序只与 team-leader 通讯**，不直接联系其他 agent。
-  6. **主程序检查标记**（拆除统一走 Phase B 末尾的「团队拆除标准动作
-     （TEARDOWN）」，以 `~/.claude/teams/<team>/`、`~/.claude/tasks/<team>/`
-     目录消失为判据，目录残留则 `rm -rf` 兜底）：
-     - `.cron_team_completed` → 执行 TEARDOWN（确认目录消失）→
-       运行 `./scripts/apply_f1_review.py` → `./scripts/run_loop.sh`；
-     - `.cron_team_recreate` → team-leader 已崩溃：执行 TEARDOWN 清空旧 team →
-       重建同名 team（受 ≥2 次重建上限保护）→ 本 turn 结束等待新 team。
-       **team-leader 还在则绝不重建。**
+  4. **不要创建主程序常驻监控 cron**，也不要依赖 Stop hook 强制回主进程。
+     等待 team-leader 的 `[TEAM_COMPLETE]` 信号。
+  5. 收到 `[TEAM_COMPLETE]` 后，先对 F1 team 执行 TEARDOWN（确认
+     `~/.claude/teams/<team>/`、`~/.claude/tasks/<team>/` 目录消失，目录残留则
+     `rm -rf` 兜底），然后运行消息中的
+     `NEXT_COMMAND: ./scripts/apply_f1_review.py && ./scripts/run_loop.sh`。
 - `team-leader` writes the review (the `## F1 Verdict` block and an Agent Team
   Execution Log) to `runtime/debates/<exp_name>_f1_review.md`. Then apply it:
 
