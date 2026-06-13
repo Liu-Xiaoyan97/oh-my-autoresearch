@@ -206,6 +206,14 @@ signals the orchestrator to disband.
 team，但在同一时间内只能存在一个活跃的 team。在创建新 team 之前，必须
 先确认上一个 team 已完全清除（TeamDelete + shutdown）。
 
+**耐心与重建不变量（主程序行为规约）。** 主程序对每个阶段的 team 必须**保持
+耐心**：单个 team 的等待预算为**最长 20 分钟**（从该 team 创建、或上一次成功
+重启 agent 起算，以较晚者为准）。在预算内不得催促性地拆除或重建 team。超时后
+也不要直接放弃，而是先**向 team-leader 询问哪些 agent 需要重启**并重启它们；
+**只有在确认 team-leader 本身已崩溃（无法应答）时，才清空并重建整个 team。**
+铁律：**只要 team-leader 还在（能应答），就绝不创建新的 team，也不 TeamDelete**
+——重建只发生在 team-leader 确认失联之后。
+
 Orchestration procedure (per team-leader step — B1, then B2, then B3):
 
 1. **检查 team 唯一性。** 在创建任何新 team 之前，确认没有活跃的 team 存在。
@@ -238,9 +246,10 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
    你是 Phase B AgentTeam 的监控 cron。**你的职责仅是监控和发信号，
    不执行 shutdown、TeamDelete 或 phase 推进。这些由主程序负责。**
 
-   ## 阶段 0：快速退出（已完成）
-   1. 检查 `runtime/state/.cron_team_completed` 是否存在。
-      若存在 → 主程序尚未清理，team 已完成，无需监控。直接结束本次触发。
+   ## 阶段 0：快速退出（已有待处理信号）
+   1. 检查 `runtime/state/.cron_team_completed` 或
+      `runtime/state/.cron_team_recreate` 是否存在。
+      若任一存在 → 主程序尚未处理该信号，无需再监控。直接结束本次触发。
 
    ## 阶段 1：阶段校验（Phase Validation）
    1. 读取 `runtime/state/state.json`，记录当前 `phase`。
@@ -254,34 +263,42 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
       - 执行 `TeamDelete`（若仍失败，记录并继续）
    5. 简要记录清理结果。
 
-   ## 阶段 2：Agent 异常检测与恢复
+   ## 阶段 2：进度查询（保持耐心，不急于重启）
    1. 向 `team-leader` 发送进度查询：
       `SendMessage` to `"team-leader"` 内容：
       "请列出：(1) 已回传 [CONCLUSION] 的 agent 名称；
        (2) 尚未回传的 required agent 名称；
        (3) 你是否仍在等待。"
-   2. 等待 team-leader 回复（60 秒内）。分析回复：
-      a. team-leader 正常回复 → 进入阶段 3
-      b. team-leader 60 秒未回复 → team-leader 可能崩溃：
-         - 重新 spawn team-leader（相同 team_name、subagent_type、name）
-         - 告知新 team-leader 本阶段所需 specialists 列表及 debate 文件路径
-         - 本次结束，等待下次 cron 触发
-      c. team-leader 报告某 specialist 缺失 [CONCLUSION]：
-         - 重新 spawn 该 specialist（相同 name、subagent_type、team_name），
-           告知其重新发送 [CONCLUSION] 到 team-leader
-         - 本次结束
+   2. 等待 team-leader 回复（60 秒内），无论是否回复都进入阶段 3——
+      **在 20 分钟预算内不要因一次未回复就重启 team-leader 或重建 team**
+      （保持耐心）。是否需要恢复，统一在阶段 3 按耗时判定。
 
-   ## 阶段 3：完成检测——只发信号，不做清理！
+   ## 阶段 3：完成检测 / 20 分钟超时恢复
    1. 若 team-leader 回复了 "任务完成，解散团队" 信号：
       **只创建标记文件，不做清理！**
       用 Write 工具创建 `runtime/state/.cron_team_completed`
-      （内容为 team-leader 的完成消息原文）。
+      （内容为 team-leader 的完成消息原文）。本次结束。
 
-   2. 若 team-leader 未完成，检查总耗时：
-      - 若从 team 创建至今超过 30 分钟（超时）：
-        用 Write 工具创建 `runtime/state/.cron_team_completed`
-        （内容为 "TIMEOUT: 超过 30 分钟"）
-      - 否则：本次结束，等待下次 cron 触发
+   2. 否则计算耗时 = 现在 − max(team 创建时间, 上次重启时间)。
+      上次重启时间读取 `runtime/state/.cron_patience_reset_at`（若不存在则用
+      team 创建时间，取自 `~/.claude/teams/<team>/config.json`）。
+      - **耗时 ≤ 20 分钟** → 保持耐心，本次结束，等待下次 cron 触发。
+      - **耗时 > 20 分钟（超时恢复）**：
+        a. 向 team-leader 发送重启询问：
+           `SendMessage` to `"team-leader"` 内容：
+           "已超过 20 分钟。请仅回复需要重启的 agent 名称列表（未回传
+            [CONCLUSION] 或疑似卡死的）；若一切正常仍在推进，回复 '无'。"
+        b. **team-leader 在 90 秒内应答**（team-leader 还活着）：
+           - 对它点名的每个 agent，用 Agent 工具重新 spawn（相同 name、
+             subagent_type、team_name），告知其重新发送 [CONCLUSION] 给
+             team-leader。**team-leader 还在，绝不新建 team、绝不 TeamDelete。**
+           - 用 Write 更新 `runtime/state/.cron_patience_reset_at` 为当前 ISO
+             时间（重置 20 分钟预算，给恢复后的 team 新的耐心窗口）。
+           - 简要记录重启了哪些 agent。本次结束。
+        c. **team-leader 90 秒内无应答**（视为 team-leader 已崩溃）：
+           - **不要自行 TeamDelete 或重启 team-leader。** 用 Write 工具创建
+             `runtime/state/.cron_team_recreate`（内容："team-leader 无应答超过
+             90 秒，需清空并重建 team"）。清空与重建由主程序执行。本次结束。
    ```
 
 5. **主程序只与 team-leader 通讯。** 主程序（编排者）在任何时候都**不得**直接
@@ -300,30 +317,52 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
    （phase=B 会阻止退出），主程序会持续循环。每次进入 Phase B 的 turn 中，
    主程序必须：
 
-   1. 检查 `runtime/state/.cron_team_completed` 是否存在
+   1. 检查 `runtime/state/.cron_team_completed` 与
+      `runtime/state/.cron_team_recreate` 是否存在
 
-   2. **若标记存在** → team 已完成（正常或超时）：
-      a. 读取标记文件内容，判断是正常完成还是 TIMEOUT
-      b. **向所有 team 成员发送 `shutdown_request`**
-      c. **确认所有成员已退出**：向每个成员发送简短 ping
+   2. **若 `.cron_team_completed` 存在** → team 已正常完成（team-leader 发出了
+      "任务完成，解散团队"）：
+      a. **向所有 team 成员发送 `shutdown_request`**
+      b. **确认所有成员已退出**：向每个成员发送简短 ping
          （`SendMessage` 内容为 "."），已退出的 agent 会返回错误。
          对仍在运行的 agent，等待 5-10 秒后重试，最多重试 3 轮（约 30 秒）
-      d. 执行 `TeamDelete`
-      d2. **进程兜底扫描**：`TeamDelete` 只删元数据，本身不杀进程。删完后运行
+      c. 执行 `TeamDelete`
+      c2. **进程兜底扫描**：`TeamDelete` 只删元数据，本身不杀进程。删完后运行
           `pgrep -fl -- '--agent-id'`（或
           `ps aux | grep -- '--agent-id' | grep '@<team_name>'`）确认没有残留
           的 agent 进程；若仍有，按 pid 逐个 `kill` 后再继续。
-      e. 删除 `runtime/state/.cron_team_completed`
-      f. 若正常完成：运行 `./scripts/apply_agentteam_plan.py --advance`
-         若超时：运行 `./scripts/set_phase.sh BLOCKED C1`，
-         block_reason="AgentTeam 超时：30 分钟内未完成"
-      g. 运行 `./scripts/run_loop.sh`
+      d. 删除 `runtime/state/.cron_team_completed`，并清理本阶段的恢复状态文件
+         `runtime/state/.cron_patience_reset_at` 与
+         `runtime/state/.cron_recreate_count`（若存在）
+      e. 运行 `./scripts/apply_agentteam_plan.py --advance`
+      f. 运行 `./scripts/run_loop.sh`
 
-   3. **若标记不存在** → team 仍在进行中：
+   3. **若 `.cron_team_recreate` 存在** → cron 判定 team-leader 已崩溃（无应答），
+      需清空并重建整个 team。**这是唯一允许重建 team 的入口——前提是 team-leader
+      已确认失联；只要 team-leader 还能应答就绝不走到这里。**
+      a. **重建上限保护**：读取 `runtime/state/.cron_recreate_count`（不存在视为
+         0）。若已 ≥ 2 → 重建两次仍失败，运行
+         `./scripts/set_phase.sh BLOCKED C1`，
+         block_reason="AgentTeam 反复重建仍失败：team-leader 多次崩溃"；删除
+         `.cron_team_recreate`、`.cron_patience_reset_at`、`.cron_recreate_count`
+         后运行 `./scripts/run_loop.sh`，本 turn 结束。
+      b. 否则**清空旧 team**：向所有成员发 `shutdown_request` → 逐个 ping 确认
+         退出（最多 3 轮）→ `TeamDelete` → `pgrep -fl -- '--agent-id'` 兜底
+         `kill` 残留进程（拆除语义见下方说明）。
+      c. 删除 `runtime/state/.cron_team_recreate` 与
+         `runtime/state/.cron_patience_reset_at`（若存在）；把
+         `runtime/state/.cron_recreate_count` 自增 1 写回。
+      d. **重建 team**：按本节步骤 2–4 重新 `TeamCreate`（沿用同一 team 名）+
+         spawn `team-leader` 与本步骤所需 specialists + 新建监控 cron。
+      e. 本 turn 结束——不推进 phase，等待新 team 完成。
+
+   4. **若两个标记都不存在** → team 仍在进行中（耐心等待，预算 20 分钟）：
       a. 检查 cron 是否仍在活跃（`CronList`）
       b. 若 cron 不存在或已失效 → 重新创建 cron（同步骤 4）
       c. 若 cron 存在 → **不做任何操作，直接结束本 turn。**
-         Cron 每 2 分钟自行查询 team-leader 进度，主程序无需重复查询。
+         Cron 每 2 分钟自行查询 team-leader 进度，并在超过 20 分钟时按"询问
+         team-leader 重启哪些 agent / team-leader 无应答则发重建信号"恢复，
+         主程序无需重复查询。
 
 > **为什么必须先 shutdown_request + ping 确认，再 TeamDelete（拆除语义）。**
 > `TeamDelete` 是**纯元数据操作**：它只删除 `~/.claude/teams/<team>/` 与
@@ -423,13 +462,18 @@ Compare current experiment results against `runtime/experiments/best.json`.
      in the background. Specialists `SendMessage` `[CONCLUSION]` to
      `team-leader`; main turn only receives one-line acks.
   4. **创建主程序 cron 监控**（使用与 Phase B 相同的增强 prompt 模板，
-     包含阶段校验 + Agent 异常恢复 + 完成检测三阶段。注意：F1 的
-     apply 脚本是 `./scripts/apply_f1_review.py` 而非
-     `--advance`；标记文件同为 `runtime/state/.cron_team_completed`）
+     包含阶段校验 + 进度查询 + 20 分钟超时恢复三阶段，**同样保持 20 分钟耐心
+     预算**：超时先问 team-leader 重启哪些 agent，team-leader 无应答才写
+     `.cron_team_recreate` 让主程序清空+重建。注意：F1 的 apply 脚本是
+     `./scripts/apply_f1_review.py` 而非 `--advance`；标记文件同为
+     `runtime/state/.cron_team_completed` 与 `runtime/state/.cron_team_recreate`）
   5. **主程序只与 team-leader 通讯**，不直接联系其他 agent。
-  6. **主程序检查 `.cron_team_completed` 标记** → 确认所有成员退出 →
-     TeamDelete → 运行 `./scripts/apply_f1_review.py` →
-     `./scripts/run_loop.sh`。
+  6. **主程序检查标记**：
+     - `.cron_team_completed` → 确认所有成员退出 → TeamDelete →
+       运行 `./scripts/apply_f1_review.py` → `./scripts/run_loop.sh`；
+     - `.cron_team_recreate` → team-leader 已崩溃：清空旧 team（shutdown +
+       confirm + TeamDelete + pgrep 兜底）→ 重建同名 team（受 ≥2 次重建上限
+       保护）→ 本 turn 结束等待新 team。**team-leader 还在则绝不重建。**
 - `team-leader` writes the review (the `## F1 Verdict` block and an Agent Team
   Execution Log) to `runtime/debates/<exp_name>_f1_review.md`. Then apply it:
 
