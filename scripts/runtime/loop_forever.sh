@@ -25,8 +25,14 @@ if [ ! -x "$PYTHON_BIN" ]; then PYTHON_BIN="$(command -v python3 || true)"; fi
 cd "$ROOT_DIR"
 
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
-CLAUDE_ARGS="${CLAUDE_ARGS:---permission-mode bypassPermissions}"
+CLAUDE_ARGS="${CLAUDE_ARGS:---dangerously-skip-permissions}"
 MAX_ITERS="${AUTORESEARCH_MAX_ITERS:-0}"
+
+# Make the Stop hook allow the per-iteration session to stop at the Phase A
+# boundary; each loop below then starts the next iteration in a fresh `claude`
+# process (clean context). Without this the spawned session would run
+# continuously (the in-CLI default mode).
+export AUTORESEARCH_STOP_AT_A=1
 
 if ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
   echo "[driver] claude CLI not found (set CLAUDE_BIN). Aborting." >&2

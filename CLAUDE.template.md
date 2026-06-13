@@ -11,20 +11,21 @@ advance the loop by running:
 
 After any phase finishes, immediately inspect `runtime/state/state.json` and
 continue with `./scripts/run_loop.sh`. Do not stop after a single phase just
-because the phase completed.
+because the phase completed. Continue until the state is `BLOCKED` or `DONE`.
 
-Run until you reach the **Phase A boundary** — i.e. Phase F has completed and
-the workflow has returned to Phase A (one full iteration) — or until the state
-is `BLOCKED` or `DONE`. At the Phase A boundary the session is allowed to stop
-(the Stop hook permits it) so the context can be compacted before the next
-iteration. Because `runtime/` is the source of truth, a fresh session resumes
-the loop correctly.
+Context management — two modes (the Stop hook adapts via `AUTORESEARCH_STOP_AT_A`):
 
-- **Unattended runs**: use `./scripts/loop_forever.sh`, which runs one iteration
-  per fresh `claude` session (clean context each iteration — no manual
-  `/compact` needed) until `DONE`/`BLOCKED`.
-- **Interactive runs**: at the Phase A boundary, `/compact` then `/loop` to
-  continue the next iteration.
+- **In-CLI continuous (default)**: the whole A..F loop runs in ONE interactive
+  session and keeps going across iterations; the session stops only at `BLOCKED`
+  or `DONE`. Context is bounded by Claude Code **auto-compact** — ensure it is
+  enabled via `/config`. (Claude cannot self-invoke `/compact`; auto-compact is
+  the in-CLI mechanism.) Because `runtime/` is the source of truth, compaction at
+  any point is safe — after it, re-read runtime/state and continue.
+- **Fresh session per iteration (unattended driver)**: run
+  `./scripts/loop_forever.sh`. It sets `AUTORESEARCH_STOP_AT_A=1` so each
+  iteration runs in its own `claude` process and stops at the Phase A boundary;
+  the driver then starts the next iteration with a clean context — no `/compact`
+  needed at all.
 
 Human intervention is required when the state is `BLOCKED`, when the state is
 `DONE`, or when a command fails in a way the workflow cannot repair.

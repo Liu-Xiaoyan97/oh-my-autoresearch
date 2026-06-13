@@ -2,17 +2,26 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 
-# Phases that must keep running within the SAME session. Phase A is intentionally
-# excluded: it is the per-iteration boundary (Phase F returns the workflow to A).
-# Allowing the session to stop there lets the context be compacted, or a fresh
-# session (e.g. scripts/loop_forever.sh) start the next iteration with a clean
-# context. Because runtime/ is the source of truth, resuming after a stop is
-# safe. BLOCKED and DONE always allow stopping.
+# Phases that must keep running within the SAME session (the Stop hook blocks
+# stopping there and forces the loop to continue).
+#
+# Two modes:
+#   * Default (in-CLI continuous run): the whole A..F loop runs in ONE session;
+#     Phase A also keeps going. Context is bounded by Claude Code's auto-compact
+#     (enable it via /config). The session stops only at BLOCKED or DONE.
+#   * AUTORESEARCH_STOP_AT_A=1 (set by scripts/loop_forever.sh): the session is
+#     allowed to stop at the Phase A boundary (Phase F returns the workflow to
+#     A), so an external driver can start each iteration in a FRESH session with
+#     a clean context. Because runtime/ is the source of truth, resuming is safe.
 CONTINUE_PHASES = {"B", "C", "D", "E", "F"}
+if os.environ.get("AUTORESEARCH_STOP_AT_A") != "1":
+    # Continuous in-CLI mode: do not stop at the Phase A boundary either.
+    CONTINUE_PHASES = CONTINUE_PHASES | {"A"}
 
 
 def main() -> int:
@@ -32,18 +41,24 @@ def main() -> int:
     blocked = bool(state.get("blocked"))
 
     if phase in CONTINUE_PHASES and status == "running" and not blocked:
-        print(
-            f"AutoResearch iteration in progress (phase {phase}). Continue with "
-            "`./scripts/run_loop.sh` until the workflow returns to the Phase A "
-            "boundary (one full iteration), then this session may stop so the "
-            "context can be compacted before the next iteration.",
-            file=sys.stderr,
-        )
+        if os.environ.get("AUTORESEARCH_STOP_AT_A") == "1":
+            msg = (
+                f"AutoResearch iteration in progress (phase {phase}). Continue "
+                "with `./scripts/run_loop.sh` until the workflow returns to the "
+                "Phase A boundary (one full iteration); then this session may stop."
+            )
+        else:
+            msg = (
+                f"AutoResearch is running (phase {phase}). Continue the loop with "
+                "`./scripts/run_loop.sh` until runtime/state/state.json reaches "
+                "BLOCKED or DONE. Context is bounded by Claude Code auto-compact "
+                "(ensure it is enabled via /config)."
+            )
+        print(msg, file=sys.stderr)
         return 2
 
-    # phase == A (iteration boundary), BLOCKED, or DONE -> allow the session to
-    # stop. At the A boundary: /compact then /loop to continue, or let
-    # scripts/loop_forever.sh start the next iteration in a fresh session.
+    # Not in a continue-phase (e.g. BLOCKED / DONE, or the Phase A boundary when
+    # AUTORESEARCH_STOP_AT_A=1) -> allow the session to stop.
     return 0
 
 
