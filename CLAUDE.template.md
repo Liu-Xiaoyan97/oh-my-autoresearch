@@ -17,15 +17,18 @@ turn must run after teardown. Continue until the state is `BLOCKED` or `DONE`.
 
 Context management:
 
-- **Default — explicit in-process continuation.** The Stop hook is non-coercive
-  by default: it does not force the main turn to keep running. Continue by
-  running the explicit commands produced by the phase scripts or by the
-  AgentTeam `[TEAM_COMPLETE]` signal. This prevents the Stop hook from dragging
-  the main turn forward while old in-process team sessions are still being
-  released. Claude Code auto-compact still fires automatically when context
-  crosses the threshold (runtime/ is the source of truth, so a mid-loop
-  compaction is safe). The default ~95%-of-1M threshold is too high to ever fire
-  usefully, so this deployment lowers it via `env` in `.claude/settings.json`:
+- **Continuation is explicit-command-driven — there is NO Stop hook.** This
+  workflow does not use any Stop-hook coercion to keep the main turn running.
+  Advance only by running the explicit commands produced by the phase scripts,
+  or the `NEXT_COMMAND` carried in the AgentTeam `[TEAM_COMPLETE]` signal that
+  `team-leader` sends together with `任务完成，解散团队`. When a turn ends, it
+  ends; the next `./scripts/run_loop.sh` (or `NEXT_COMMAND`) resumes from
+  `runtime/state` (the source of truth), so stopping mid-loop is always safe.
+- **Auto-compact bounds context automatically.** Claude Code auto-compact fires
+  when context crosses the threshold (a mid-loop compaction is safe — re-read
+  runtime/state and continue). The default ~95%-of-1M threshold is too high to
+  ever fire usefully, so this deployment lowers it via `env` in
+  `.claude/settings.json`:
   - `CLAUDE_CODE_AUTO_COMPACT_WINDOW` — effective window for the calc (e.g. 300000)
   - `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` — percent of that window (e.g. 70)
   → compaction triggers around `window × pct` tokens. **Env changes apply only to
@@ -34,11 +37,11 @@ Context management:
   often, higher to keep more context; `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` reverts
   to a 200k window.
 - **Unattended driver / per-iteration fresh context**: run
-  `./scripts/loop_forever.sh`. It sets `AUTORESEARCH_FORCE_CONTINUE=1` and
-  `AUTORESEARCH_STOP_AT_A=1` so the Stop hook is used only inside driver-spawned
-  sessions: it blocks mid-iteration stops, then allows stopping at the Phase A
-  boundary so the driver can start the next iteration in a fresh `claude`
-  process (no compaction needed at all).
+  `./scripts/loop_forever.sh`. It starts a fresh `claude -p` process per session
+  and drives the loop via the prompt plus an outer progress/stall guard (reading
+  `runtime/state` between sessions) — no Stop hook, no env coercion. Each session
+  resumes from runtime state, so a session covering less than a full iteration is
+  fine; the next session continues from the recorded phase.
 
 Human intervention is required when the state is `BLOCKED`, when the state is
 `DONE`, or when a command fails in a way the workflow cannot repair.

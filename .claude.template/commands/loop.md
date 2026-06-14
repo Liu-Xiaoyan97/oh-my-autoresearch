@@ -29,11 +29,10 @@ to NEW sessions only — restart `claude` after editing. Claude cannot run
 bounded during a long continuous run. A mid-loop compaction is safe — re-read
 runtime/state and continue.
 
-For per-iteration fresh contexts with no compaction at all, run
-`./scripts/loop_forever.sh` from a terminal: it sets
-`AUTORESEARCH_FORCE_CONTINUE=1` and `AUTORESEARCH_STOP_AT_A=1`, then starts a
-fresh `claude` process per iteration. Ordinary in-process CLI usage does not set
-`AUTORESEARCH_FORCE_CONTINUE`; there the Stop hook stays non-coercive and
-AgentTeam phases advance through the `[TEAM_COMPLETE]` message's `NEXT_COMMAND`.
+For per-iteration fresh contexts, run `./scripts/loop_forever.sh` from a
+terminal: it starts a fresh `claude -p` process per session and drives the loop
+via its prompt plus an outer progress/stall guard — there is NO Stop hook and no
+env coercion. AgentTeam phases advance through the `[TEAM_COMPLETE]` message's
+`NEXT_COMMAND` that `team-leader` sends alongside `任务完成，解散团队`.
 
 Do not ask the user before advancing from one successful phase to the next.

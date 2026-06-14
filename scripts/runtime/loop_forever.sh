@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Unattended AutoResearch driver.
 #
-# Runs ONE full iteration (Phase A..F) per FRESH `claude` session, so every
-# iteration starts with a clean context window — no manual /compact needed and
-# no unbounded context growth. This relies on the Stop hook (.claude/hooks/
-# stop.py) allowing a session to stop at the Phase A boundary (Phase F returns
-# the workflow to A). Because runtime/ is the source of truth, each fresh
-# session resumes correctly from runtime/state.
+# Runs the loop in FRESH `claude -p` sessions so context never grows unbounded —
+# no manual /compact needed. There is NO Stop hook: each session is driven by the
+# prompt below, and this outer loop re-launches `claude` and checks progress via
+# runtime/state between sessions. Because runtime/ is the source of truth, each
+# fresh session resumes correctly from the recorded phase, so a session that
+# covers less than a full A..F iteration is fine — the next one continues.
 #
 # Usage:
 #   ./scripts/loop_forever.sh
@@ -27,13 +27,6 @@ cd "$ROOT_DIR"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CLAUDE_ARGS="${CLAUDE_ARGS:---dangerously-skip-permissions}"
 MAX_ITERS="${AUTORESEARCH_MAX_ITERS:-0}"
-
-# Make each spawned session use the Stop hook as a driver guard and stop at the
-# Phase A boundary, so every loop iteration below runs in a fresh `claude`
-# process (clean context). Ordinary in-process CLI usage does not set
-# AUTORESEARCH_FORCE_CONTINUE, so the Stop hook stays non-coercive there.
-export AUTORESEARCH_FORCE_CONTINUE=1
-export AUTORESEARCH_STOP_AT_A=1
 
 if ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
   echo "[driver] claude CLI not found (set CLAUDE_BIN). Aborting." >&2

@@ -56,9 +56,6 @@ copy_if_missing:
   - from: .claude.template/hooks/post_tool_use.py
     to: .claude/hooks/post_tool_use.py
 
-  - from: .claude.template/hooks/stop.py
-    to: .claude/hooks/stop.py
-
   - from: .claude.template/hooks/validate_state.py
     to: .claude/hooks/validate_state.py
 
