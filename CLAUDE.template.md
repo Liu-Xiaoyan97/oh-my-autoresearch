@@ -341,13 +341,26 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 >    ```
 >    自然语言“收到/确认”不算完成；把 JSON 放进字符串正文也不算完成。没有
 >    structured-object `shutdown_response.approve=true`，Claude Code
->    可能会继续把该 teammate 渲染为 idle。**给足退出时间——30 秒往往不够。**
->    in-process teammate 在 approve 之后还要若干秒才真正 winding-down，多个
->    agent 串行退出会叠加；**轮询等待最长 2 分钟**（每 ~10–15 秒查一次回执），
->    对仍未回 `shutdown_response.approve=true` 的 target **重发
->    `shutdown_request`**（同一 request_id）。2 分钟内全部 approve 即视为通过；
->    只有超过 2 分钟仍有 target 不 approve，才不要推进下一 team、提示人工处理或
->    重启 Claude CLI。**不要因为某个 agent 慢就提前放弃或提前 rm。**
+>    可能会继续把该 teammate 渲染为 idle。
+>    **等待方式：严禁前台 `sleep`，用 cron 轮询。** 发完所有 `shutdown_request`
+>    后，主程序**绝不能**用 `sleep`（或 `sleep`+循环、`while sleep`、
+>    `sleep && ls` 等任何前台休眠）原地等批准——那会被 harness 阻断，且违反
+>    no-sleep 规约（这正是上次主程序跑 `sleep 20 && echo "waited 50s"` 的违规
+>    缺口）。正确做法：发完请求后**结束本 turn**；每个 target 回的
+>    `shutdown_response` 会重新唤醒主 turn，被唤醒时再检查谁还没批准。若需要主动
+>    兜底唤醒，用 `CronCreate` 建一个 60–90 秒的 teardown 轮询 cron，触发时重新
+>    `ls` 检查 + 对未批准者重发 `shutdown_request`；拆除完成（或进入 rm 兜底）后
+>    立即 `CronDelete`，绝不留孤儿 cron。
+>    **批准等待有界，过界即走兜底（应对 flash specialist 的叙述式假批准）。**
+>    in-process flash 模型（如 `flow-arch-reviewer`，所有 specialist 都是
+>    `claude-deepseek-4-flash`）经常**口头声称**“已回复结构化批准 / 已再次批准
+>    shutdown 请求”，却**根本没真正发出** structured `shutdown_response` 帧——这种
+>    target 你再重发多少次，它都只会继续叙述、永远不会真正退出。因此批准等待
+>    **最长 2 分钟**（从首次发请求起算，用 cron 轮询、不用 sleep）：2 分钟内全部
+>    回真正的 structured-approve 即视为通过；**一旦过 2 分钟仍有 target 没回真正的
+>    structured 帧，立刻停止无限重发、停止等待——直接进入 step 4 的 `TeamDelete`
+>    与 step 6 的 `rm -rf` 兜底**。这条兜底路径正是为这种顽固 specialist 准备的，
+>    走它**不算失败**，不需要提示人工处理（除非连 `rm -rf` 后目录仍在）。
 > 4. 调用 `TeamDelete` 收尾。**注意它可能返回 `"No team name found"` 而 no-op**
 >    （见下）——所以不能把它当判据。
 > 5. 运行 metadata cleanup 兜底：
@@ -357,8 +370,10 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 >    - 两个目录都不存在 → 拆除成功，结束。
 >    - 仍存在 → **先不要 rm。** approve 之后空 team 的目录回收有秒级~十几秒的
 >      延迟（in-process task 退出 + 空 team 被回收是异步的）；**轮询等待最长
->      2 分钟**（每 ~10–15 秒 `ls` 一次），让目录自然消失——**优雅回收永远优先于
->      强删**，强删一个尚未退出的 task 的元数据会留下半死状态。
+>      2 分钟**让目录自然消失——**优雅回收永远优先于强删**，强删一个尚未退出的
+>      task 的元数据会留下半死状态。**等待方式同 step 3：严禁前台 `sleep`，用
+>      `CronCreate` 60–90 秒轮询 cron 重新唤醒主 turn 后再 `ls`，目录消失或过界后
+>      `CronDelete`。绝不用 `sleep`/`while sleep`/`sleep && ls` 等目录消失。**
 >    - 仍存在且已过 2 分钟 → 先 `pgrep -fl -- '--agent-id'` 确认没有该 team 的
 >      残留进程（tmux/iTerm 后端才会有；in-process 后端恒为空）；确认无进程后，
 >      **`rm -rf ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>` 兜底删除**

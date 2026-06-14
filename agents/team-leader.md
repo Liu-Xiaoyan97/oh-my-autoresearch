@@ -68,8 +68,14 @@ team (between you and the specialists) and never enters the main turn's context.
   ```
   A natural-language acknowledgement is not enough, and JSON-as-string is not
   enough; without explicit object-form `shutdown_response.approve=true`,
-  in-process Claude Code may keep your idle panel alive. After sending the
-  approval, stop immediately.
+  in-process Claude Code may keep your idle panel alive. **Every time** a
+  `shutdown_request` arrives — even if you believe you already approved, even if
+  it carries the same `request_id` — you MUST actually emit a fresh
+  `SendMessage` structured `shutdown_response` tool call. Merely narrating
+  "already approved / approved again" in text WITHOUT issuing the tool call is
+  ineffective: Claude Code never receives the frame, keeps resending the
+  request, and you never exit. After actually sending the approval, stop
+  immediately.
 
 ## Message Format Recognition
 
