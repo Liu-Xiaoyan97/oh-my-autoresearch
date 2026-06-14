@@ -377,9 +377,30 @@ every non-lead project agent: read `~/.claude/teams/<team>/config.json`, exclude
 the main/orchestrator member (`agentId == leadAgentId`, `agentType ==
 "team-lead"`, or `name == "team-lead"`), then send `shutdown_request` only to
 the remaining project agents. Do not send shutdown to `team-lead` and do not
-wait for its approval. Require each target to reply via `SendMessage` with
-`{{"type":"shutdown_response","approve":true}}`, call `TeamDelete`, and verify
-`~/.claude/teams/<team>/` plus
+wait for its approval. Send each shutdown request with `SendMessage` structured
+object form, not a JSON string:
+
+```yaml
+to: "<target-agent-name>"
+summary: "Request AgentTeam shutdown"
+message:
+  type: "shutdown_request"
+  request_id: "shutdown-<timestamp>@<target-agent-name>"
+  reason: "B subphase complete; release this in-process teammate."
+```
+
+Require each target to reply with structured object form:
+
+```yaml
+summary: "Shutdown approved"
+message:
+  type: "shutdown_response"
+  request_id: "<same request_id if present>"
+  approve: true
+  reason: "shutdown_request accepted"
+```
+
+Then call `TeamDelete`, and verify `~/.claude/teams/<team>/` plus
 `~/.claude/tasks/<team>/` are gone. In in-process mode, stale metadata keeps the
 agent visible in the CLI panel; remove those two directories after shutdown and
 `TeamDelete` if they still exist. Run

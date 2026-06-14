@@ -53,12 +53,23 @@ team (between you and the specialists) and never enters the main turn's context.
 - **After completion, stop.** Once you send the structured `[TEAM_COMPLETE]`
   signal, do not continue into the next phase and do not run the `NEXT_COMMAND`
   yourself. End your turn and wait for the orchestrator to send
-  `shutdown_request`. When you receive `shutdown_request`, you MUST call
-  `SendMessage` back to the requester with a structured shutdown approval:
-  `{"type":"shutdown_response","approve":true,"reason":"team complete"}`.
-  A natural-language acknowledgement is not enough; without the explicit
-  `shutdown_response` approval, in-process Claude Code may keep your idle panel
-  alive. After sending the approval, stop immediately.
+  `shutdown_request`. The request may arrive as a structured object OR as an
+  inbox text string containing JSON such as
+  `{"type":"shutdown_request","request_id":"..."}`. Treat either form as a real
+  protocol frame. When you receive it, you MUST call `SendMessage` back to the
+  requester using structured object form, with a summary:
+  ```yaml
+  summary: "Shutdown approved"
+  message:
+    type: "shutdown_response"
+    request_id: "<same request_id if present>"
+    approve: true
+    reason: "team complete"
+  ```
+  A natural-language acknowledgement is not enough, and JSON-as-string is not
+  enough; without explicit object-form `shutdown_response.approve=true`,
+  in-process Claude Code may keep your idle panel alive. After sending the
+  approval, stop immediately.
 
 ## Message Format Recognition
 
@@ -133,7 +144,7 @@ specialists `SendMessage` their conclusions to you; you reconcile and write.
     TEAM_NAME: <team_name>
     PHASE_STEP: <B1|B2|B3|F1>
     RELEASE_SESSIONS: true
-    TEARDOWN_REQUIRED: Exclude the main/orchestrator team-lead member (agentId == leadAgentId, agentType == "team-lead", or name == "team-lead"); send shutdown_request only to non-lead project agents; require each target to SendMessage {"type":"shutdown_response","approve":true}; TeamDelete; then remove ~/.claude/teams/<team_name> and ~/.claude/tasks/<team_name> if they still exist.
+    TEARDOWN_REQUIRED: Exclude the main/orchestrator team-lead member (agentId == leadAgentId, agentType == "team-lead", or name == "team-lead"); send shutdown_request only to non-lead project agents using SendMessage structured object form with summary + message.type; require each target to SendMessage structured object form {"type":"shutdown_response","approve":true}; TeamDelete; then remove ~/.claude/teams/<team_name> and ~/.claude/tasks/<team_name> if they still exist.
     NEXT_COMMAND: <see below>
     ```
     `NEXT_COMMAND` is:

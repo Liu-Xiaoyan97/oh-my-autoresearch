@@ -395,6 +395,14 @@ else
   exit 1
 fi
 
+if grep -Eq "Request AgentTeam shutdown|message:|shutdown_request|shutdown_response|Shutdown approved" scripts/phases/phase_b_exploration.sh \
+  && grep -Eq "Request AgentTeam shutdown|message:|shutdown_request|shutdown_response|Shutdown approved" scripts/phases/phase_f_checkpoint.sh; then
+  echo "PASS: phase prompts require structured object-form SendMessage shutdown protocol"
+else
+  echo "ERROR: phase prompts do not require structured object-form SendMessage shutdown protocol" >&2
+  exit 1
+fi
+
 for file in "${phase_ef_refs[@]}"; do
   if [[ ! -f "$file" ]]; then
     echo "ERROR: missing file: $file" >&2

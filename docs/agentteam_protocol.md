@@ -56,8 +56,8 @@ orchestrator MUST send `shutdown_request` to every non-lead project agent from
 `~/.claude/teams/<team>/config.json`. Exclude the main/orchestrator member:
 `agentId == leadAgentId`, `agentType == "team-lead"`, or `name == "team-lead"`.
 Do not wait for `team-lead`; it is the main process. Wait only for each target
-project agent to reply via `SendMessage` with
-`{"type":"shutdown_response","approve":true}`, call `TeamDelete`, and verify
+project agent to reply via `SendMessage` with structured object-form approval,
+call `TeamDelete`, and verify
 `~/.claude/teams/<team>/` plus
 `~/.claude/tasks/<team>/` are gone before advancing. In in-process mode, any
 remaining metadata directory keeps the old agent visible in the CLI panel, so
@@ -66,6 +66,35 @@ the final fallback is:
 ```bash
 ./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team> --stale-only
 ```
+
+The shutdown request MUST be sent as a structured `message` object with a
+`summary`, never as a string containing JSON:
+
+```yaml
+to: "<agent-name>"
+summary: "Request AgentTeam shutdown"
+message:
+  type: "shutdown_request"
+  request_id: "shutdown-<timestamp>@<agent-name>"
+  reason: "AgentTeam phase complete; release this in-process teammate."
+```
+
+The shutdown approval MUST also be a structured object:
+
+```yaml
+summary: "Shutdown approved"
+message:
+  type: "shutdown_response"
+  request_id: "<same request_id if present>"
+  approve: true
+  reason: "shutdown_request accepted"
+```
+
+Agents must treat both forms as protocol frames: a real structured
+`shutdown_request` object, or an inbox `text` string containing JSON whose
+`type` is `shutdown_request`. In either case they must reply with the structured
+approval above. Plain text acknowledgement and JSON-as-string acknowledgement do
+not release in-process teammates.
 
 Also run `./scripts/cleanup_agentteam_metadata.py --yes --stale-only` before
 creating the next team. If the CLI panel still shows old in-process sessions

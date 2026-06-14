@@ -300,12 +300,31 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 >    `math-theorist`、`numerical-debugger`、`flow-arch-reviewer`、
 >    `orthogonal-direction-scout`）。B1/B3/F1 通常应等待 4 个 approval，B2
 >    通常应等待 2 个 approval；绝不是等待包含主进程在内的 5/5。
-> 2. **对每个 target 逐个发 `shutdown_request`**（`SendMessage` to
->    `<member-name>`，`message:{type:"shutdown_request", reason:"..."}`）。
+> 2. **对每个 target 逐个发 `shutdown_request`**。必须用 `SendMessage` 的
+>    structured object form，不能把 JSON 当字符串正文发送；否则 Claude Code 会报
+>    `summary is required when message is a string` 或
+>    `message text must not be a teammate protocol frame`，并且 teammate 不会真正退出。
+>    示例：
+>    ```yaml
+>    to: "<member-name>"
+>    summary: "Request AgentTeam shutdown"
+>    message:
+>      type: "shutdown_request"
+>      request_id: "shutdown-<timestamp>@<member-name>"
+>      reason: "AgentTeam phase complete; release this in-process teammate."
+>    ```
 >    这一步**不依赖当前会话的 team 上下文指针**，所以即使跨会话/compact 之后也能送达。
 > 3. **等待结构化批准**：每个 target 必须通过 `SendMessage` 回复请求方：
->    `{"type":"shutdown_response","approve":true,"reason":"..."}`。自然语言
->    “收到/确认”不算完成；没有 `shutdown_response.approve=true`，Claude Code
+>    ```yaml
+>    summary: "Shutdown approved"
+>    message:
+>      type: "shutdown_response"
+>      request_id: "<same request_id if present>"
+>      approve: true
+>      reason: "shutdown_request accepted"
+>    ```
+>    自然语言“收到/确认”不算完成；把 JSON 放进字符串正文也不算完成。没有
+>    structured-object `shutdown_response.approve=true`，Claude Code
 >    可能会继续把该 teammate 渲染为 idle。最多等待 30 秒；未批准者再次发送
 >    `shutdown_request`，仍未批准则不要推进下一 team，提示需要人工处理或重启
 >    Claude CLI。

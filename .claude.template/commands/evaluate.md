@@ -46,8 +46,14 @@ the main/orchestrator member (`agentId == leadAgentId`,
 `agentType == "team-lead"`, or `name == "team-lead"`), then send
 `shutdown_request` only to the remaining project agents. Do not send shutdown
 to `team-lead` and do not wait for its approval. Require each target to reply via
-`SendMessage` with `{"type":"shutdown_response","approve":true}`, then call
-`TeamDelete`. In in-process mode, the CLI
+`SendMessage` with a structured object-form shutdown approval, then call
+`TeamDelete`. Do not send protocol JSON as a string: use `summary:
+"Request AgentTeam shutdown"` and `message: {type: "shutdown_request",
+request_id: "...", reason: "..."}` for the request; require `summary:
+"Shutdown approved"` and `message: {type: "shutdown_response", request_id:
+"...", approve: true, reason: "..."}` for the response. A JSON-looking inbox
+text string whose `type` is `shutdown_request` must still be treated as a real
+shutdown protocol frame by the target agent. In in-process mode, the CLI
 panel is rendered from the team/task metadata, so also verify
 `~/.claude/teams/<team>/` and `~/.claude/tasks/<team>/` are gone; if they remain
 after shutdown and `TeamDelete`, run
