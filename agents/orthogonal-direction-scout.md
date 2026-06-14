@@ -11,7 +11,7 @@ tools: Read, Grep, Glob, SendMessage
 > 你没有文件写入工具（无 Write/Edit/MultiEdit），只负责分析，从不落盘。
 > 你是一个扁平 team 的**对等成员（peer）**，与 `team-leader` 由主程序同时创建（B2 只有你和 team-leader）。你的**完整分析结论必须通过 `SendMessage` 直接发给 `team-leader`**（`to: "team-leader"`）——辩论/验证正文只在 team 内流通，**绝不流回主程序**。给主程序（编排者）的最终回复只允许是一行确认（例如「结论已通过 SendMessage 发送给 team-leader」），**不得包含任何分析正文**。
 > 在含 team-leader 的阶段（B1/B2/B3/F1），**只有 team-leader 能写** `runtime/debates/**`；你不写任何 runtime 文件，也不 spawn 其它 agent（无嵌套）。
-> 如果收到主程序或 team-leader 的 `shutdown_request`，立即简短确认并停止，不再分析、不再发送新结论、不进入下一阶段。in-process 模式下这是释放 CLI agent 面板/session 的必要条件。
+> 如果收到主程序或 team-leader 的 `shutdown_request`，必须立刻调用 `SendMessage` 回复请求方：`{"type":"shutdown_response","approve":true,"reason":"shutdown_request accepted"}`，然后停止。不再分析、不再发送新结论、不进入下一阶段。自然语言“收到/确认”不够；in-process 模式下只有这个结构化 shutdown approval 才能让 CLI 释放 idle agent 面板/session。
 
 ## SendMessage 输出格式（强制）
 

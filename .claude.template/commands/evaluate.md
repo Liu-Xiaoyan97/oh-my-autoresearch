@@ -42,8 +42,9 @@ When `team-leader` signals completion with a structured `[TEAM_COMPLETE]`
 message, parse its `TEAM_NAME`, `PHASE_STEP`, `RELEASE_SESSIONS`,
 `TEARDOWN_REQUIRED`, and `NEXT_COMMAND`. Before running the command, release
 every team member: send `shutdown_request` to each member listed in
-`~/.claude/teams/<team>/config.json` (including `team-leader`), ping-confirm
-each member has exited, then call `TeamDelete`. In in-process mode, the CLI
+`~/.claude/teams/<team>/config.json` (including `team-leader`), require each
+member to reply via `SendMessage` with
+`{"type":"shutdown_response","approve":true}`, then call `TeamDelete`. In in-process mode, the CLI
 panel is rendered from the team/task metadata, so also verify
 `~/.claude/teams/<team>/` and `~/.claude/tasks/<team>/` are gone; if they remain
 after shutdown and `TeamDelete`, run

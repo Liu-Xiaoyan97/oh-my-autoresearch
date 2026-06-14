@@ -310,15 +310,18 @@ true`, `TEARDOWN_REQUIRED`, and `NEXT_COMMAND`. No agent spawns another agent
 
 After `[TEAM_COMPLETE]`, the main turn must release the team before applying:
 send `shutdown_request` to every member listed in
-`~/.claude/teams/<team>/config.json` (including `team-leader`), ping-confirm
-exit, call `TeamDelete`, and verify `~/.claude/teams/<team>/` plus
+`~/.claude/teams/<team>/config.json` (including `team-leader`), require every
+member to reply via `SendMessage` with
+`{{"type":"shutdown_response","approve":true}}`, call `TeamDelete`, and verify
+`~/.claude/teams/<team>/` plus
 `~/.claude/tasks/<team>/` are gone. In in-process mode, stale metadata keeps the
 agent visible in the CLI panel; remove those two directories after shutdown and
 `TeamDelete` if they still exist. Run
 `./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team> --stale-only`
 after teardown. If the CLI panel still shows old F1/B agents, do not run
-`NEXT_COMMAND` until those visible sessions have received `shutdown_request` and
-disappeared. Only then run `NEXT_COMMAND`.
+`NEXT_COMMAND` until those visible sessions have approved `shutdown_request`
+with `shutdown_response.approve=true` and disappeared. Only then run
+`NEXT_COMMAND`.
 
 1. `math-theorist` (peer; DMs `team-leader`)
 2. `numerical-debugger` (peer; DMs `team-leader`)

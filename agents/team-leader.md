@@ -53,8 +53,12 @@ team (between you and the specialists) and never enters the main turn's context.
 - **After completion, stop.** Once you send the structured `[TEAM_COMPLETE]`
   signal, do not continue into the next phase and do not run the `NEXT_COMMAND`
   yourself. End your turn and wait for the orchestrator to send
-  `shutdown_request`. When you receive `shutdown_request`, acknowledge it and
-  stop immediately so the in-process CLI panel/session can be released.
+  `shutdown_request`. When you receive `shutdown_request`, you MUST call
+  `SendMessage` back to the requester with a structured shutdown approval:
+  `{"type":"shutdown_response","approve":true,"reason":"team complete"}`.
+  A natural-language acknowledgement is not enough; without the explicit
+  `shutdown_response` approval, in-process Claude Code may keep your idle panel
+  alive. After sending the approval, stop immediately.
 
 ## Message Format Recognition
 
@@ -129,7 +133,7 @@ specialists `SendMessage` their conclusions to you; you reconcile and write.
     TEAM_NAME: <team_name>
     PHASE_STEP: <B1|B2|B3|F1>
     RELEASE_SESSIONS: true
-    TEARDOWN_REQUIRED: Send shutdown_request to every member from config.json, ping-confirm exit, TeamDelete, then remove ~/.claude/teams/<team_name> and ~/.claude/tasks/<team_name> if they still exist.
+    TEARDOWN_REQUIRED: Send shutdown_request to every member from config.json, require each member to SendMessage {"type":"shutdown_response","approve":true}, TeamDelete, then remove ~/.claude/teams/<team_name> and ~/.claude/tasks/<team_name> if they still exist.
     NEXT_COMMAND: <see below>
     ```
     `NEXT_COMMAND` is:

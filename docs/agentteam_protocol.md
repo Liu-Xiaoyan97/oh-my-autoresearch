@@ -53,8 +53,10 @@ as a received conclusion.
 Only ONE team may exist per phase step. The orchestrator MUST verify no active
 team exists before creating a new one. After receiving `[TEAM_COMPLETE]`, the
 orchestrator MUST send `shutdown_request` to every member from
-`~/.claude/teams/<team>/config.json` (including `team-leader`), ping-confirm exit,
-call `TeamDelete`, and verify `~/.claude/teams/<team>/` plus
+`~/.claude/teams/<team>/config.json` (including `team-leader`), wait for each
+member to reply via `SendMessage` with
+`{"type":"shutdown_response","approve":true}`, call `TeamDelete`, and verify
+`~/.claude/teams/<team>/` plus
 `~/.claude/tasks/<team>/` are gone before advancing. In in-process mode, any
 remaining metadata directory keeps the old agent visible in the CLI panel, so
 the final fallback is:
@@ -79,7 +81,7 @@ disappear, or restart Claude CLI before continuing.
 TEAM_NAME: <team_name>
 PHASE_STEP: <B1|B2|B3|F1>
 RELEASE_SESSIONS: true
-TEARDOWN_REQUIRED: Send shutdown_request to every member, ping-confirm exit, TeamDelete, and remove stale team/task metadata if still present.
+TEARDOWN_REQUIRED: Send shutdown_request to every member, require SendMessage {"type":"shutdown_response","approve":true}, TeamDelete, and remove stale team/task metadata if still present.
 NEXT_COMMAND: <command-or-next-team-action>
 ```
 

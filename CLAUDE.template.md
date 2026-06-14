@@ -294,9 +294,12 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 >    `message:{type:"shutdown_request", reason:"..."}`）。成员名从
 >    `~/.claude/teams/<team_name>/config.json` 的 `members[].name` 解析——这一步
 >    **不依赖当前会话的 team 上下文指针**，所以即使跨会话/compact 之后也能送达。
->    **这是真正能让 teammate 退出、并使其在 CLI 面板上消失的权威信号。**
-> 2. **确认成员已退出**：向每个成员发简短 ping（`SendMessage` 内容 `"."`），
->    已退出的成员会返回错误。仍在的等待 5–10 秒重试，最多 3 轮（约 30 秒）。
+> 2. **等待结构化批准**：每个成员必须通过 `SendMessage` 回复请求方：
+>    `{"type":"shutdown_response","approve":true,"reason":"..."}`。自然语言
+>    “收到/确认”不算完成；没有 `shutdown_response.approve=true`，Claude Code
+>    可能会继续把该 teammate 渲染为 idle。最多等待 30 秒；未批准者再次发送
+>    `shutdown_request`，仍未批准则不要推进下一 team，提示需要人工处理或重启
+>    Claude CLI。
 > 3. 调用 `TeamDelete` 收尾。**注意它可能返回 `"No team name found"` 而 no-op**
 >    （见下）——所以不能把它当判据。
 > 4. 运行 metadata cleanup 兜底：
@@ -314,18 +317,21 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 > 上下文；它**不会**终止任何 teammate。两种后端的残留方式不同：
 > - **tmux / iTerm 后端**：每个 teammate 是**独立 `claude` 进程**
 >   （`claude ... --agent-id <name>@<team>`），OS 父进程是它所在的 shell / iTerm2
->   分屏 pane。只有**被批准的 `shutdown_request`**（或 kill / 关 pane）能结束它；
+>   分屏 pane。只有**收到 `shutdown_response.approve=true` 的 `shutdown_request`**
+>   （或 kill / 关 pane）能结束它；
 >   否则 `TeamDelete` 即便删了元数据，孤儿进程仍留在 iTerm2 pane 里、可被方向键
 >   导航进入。`pgrep --agent-id` 兜底正是为这种后端。
 > - **in-process 后端**（本部署默认 `teammateMode: in-process`）：teammate 没有
 >   独立进程，作为 `local_workflow` 任务跑在编排者**同一进程内**，其 CLI 面板由
->   **磁盘上的 team 元数据**渲染。`shutdown_request` 让任务退出、空 team 被回收后
->   面板才消失。**致命陷阱**：若 team 是在**会话边界/compact 之前**建立的，
+>   **磁盘上的 team 元数据 + 仍存活的 in-process task**渲染。`shutdown_request`
+>   只有在 agent 用 `SendMessage` 返回 `shutdown_response.approve=true` 后才会让
+>   任务退出；空 team 被回收后面板才消失。**致命陷阱**：若 team 是在**会话边界/compact 之前**建立的，
 >   continuation 后的会话**不再持有指向它的上下文指针**，此时 `TeamDelete` 直接
 >   返回 `"No team name found"` 并 **no-op**——既不报错也不删元数据，于是元数据
 >   长期残留、CLI 每次启动都把它渲染成可切换的孤儿面板。`pgrep` 对它恒为空、毫无
->   帮助。**唯一可靠的清理 = 先按名 `shutdown_request` 每个成员，再以目录消失为
->   判据，目录仍在则 `rm -rf` 兜底。**
+>   帮助。**唯一可靠的清理 = 先按名 `shutdown_request` 每个成员，并要求
+>   `shutdown_response.approve=true`，再以目录消失为判据，目录仍在则 `rm -rf`
+>   兜底。**
 
 Required specialists per step:
 

@@ -374,8 +374,10 @@ must not absorb the debate content. Spawn the named peer agents, let
 `team-leader` record the consolidated outputs in this file, then wait for
 `[TEAM_COMPLETE]`. Before running `NEXT_COMMAND`, the main turn must release the
 team: send `shutdown_request` to every member listed in
-`~/.claude/teams/<team>/config.json` (including `team-leader`), ping-confirm
-exit, call `TeamDelete`, and verify `~/.claude/teams/<team>/` plus
+`~/.claude/teams/<team>/config.json` (including `team-leader`), require every
+member to reply via `SendMessage` with
+`{{"type":"shutdown_response","approve":true}}`, call `TeamDelete`, and verify
+`~/.claude/teams/<team>/` plus
 `~/.claude/tasks/<team>/` are gone. In in-process mode, stale metadata keeps the
 agent visible in the CLI panel; remove those two directories after shutdown and
 `TeamDelete` if they still exist. Run
@@ -383,7 +385,8 @@ agent visible in the CLI panel; remove those two directories after shutdown and
 after teardown. Before creating B2 or B3, also run
 `./scripts/cleanup_agentteam_metadata.py --yes --stale-only`; if the CLI panel
 still shows agents from the previous B subphase, do not create the next team
-until those visible sessions have received `shutdown_request` and disappeared.
+until those visible sessions have approved `shutdown_request` with
+`shutdown_response.approve=true` and disappeared.
 
 The team must produce:
 
