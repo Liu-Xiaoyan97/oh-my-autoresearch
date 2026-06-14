@@ -233,8 +233,13 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
    ./scripts/cleanup_agentteam_metadata.py --yes --stale-only
    ```
    如果 CLI agent 面板仍显示上一 B 子阶段的 in-process agent，说明旧 session
-   还活在当前 Claude 进程内存里；此时**不得创建下一 team**，必须先对可见旧
-   agent 发送 `shutdown_request` 并等待它们消失，必要时重启 Claude CLI。
+   还活在当前 Claude 进程内存里；此时**不得创建下一 team**，必须先把它们彻底
+   释放：先发 `shutdown_request` 给优雅退出机会，**对不肯退出的用 `TaskList`
+   找出其 task_id 再 `TaskStop` 强制终止**（不依赖 agent 配合），然后 `TeamDelete`
+   /`rm -rf` 兜底，确认 `~/.claude/teams/`、`~/.claude/tasks/` 下不再有上一 team
+   的目录。**绝不能在旧 agent 还没释放干净时就 `TeamCreate` 下一个 team**——这正是
+   “几乎每次建 team 都带着上一轮没释放干净的 agent”的来源。实在清不掉再重启
+   Claude CLI。
 
 2. `TeamCreate` a team (e.g. `team_name: "phaseB-<exp_name>"`).
 
@@ -249,6 +254,14 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
      to `SendMessage` its FULL conclusions to `team-leader` with the
      `[CONCLUSION] <agent-name>` format as the first line, and to return only a
      one-line ack to the orchestrator (no analysis content).
+
+   **记录每个 teammate 的 task_id（关键：teardown 的强制释放句柄）。** 每次
+   `Agent` spawn 返回一个后台任务句柄/id（in-process teammate 本质是一个
+   `local_workflow` 后台任务）。把 spawn 返回的 **task_id 连同 name 一起记下来**
+   （写进本 turn 的工作笔记即可，不落 runtime 文件），teardown 时要用它对**不肯
+   优雅退出**的 teammate 调用 `TaskStop` 强制终止——这是唯一**不依赖 agent 主动
+   发 `shutdown_response`** 的可靠释放路径。若某次没记到 id，teardown 时可用
+   `TaskList` 重新枚举该 team 的在跑 teammate 任务来补齐。
 
 4. **主程序等待 team-leader：用 cron 轮询，绝不用 sleep。** 主程序 spawn 完
    team 后就**结束本 turn**，等待 team-leader 的 `[TEAM_COMPLETE]` 把自己唤醒。
@@ -357,15 +370,29 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 >    shutdown 请求”，却**根本没真正发出** structured `shutdown_response` 帧——这种
 >    target 你再重发多少次，它都只会继续叙述、永远不会真正退出。因此批准等待
 >    **最长 2 分钟**（从首次发请求起算，用 cron 轮询、不用 sleep）：2 分钟内全部
->    回真正的 structured-approve 即视为通过；**一旦过 2 分钟仍有 target 没回真正的
->    structured 帧，立刻停止无限重发、停止等待——直接进入 step 4 的 `TeamDelete`
->    与 step 6 的 `rm -rf` 兜底**。这条兜底路径正是为这种顽固 specialist 准备的，
->    走它**不算失败**，不需要提示人工处理（除非连 `rm -rf` 后目录仍在）。
-> 4. 调用 `TeamDelete` 收尾。**注意它可能返回 `"No team name found"` 而 no-op**
+>    回真正的 structured-approve 即视为通过；**一旦过 2 分钟（或更早，只要某个
+>    target 明显在叙述式假批准）仍有 target 没回真正的 structured 帧，立刻停止
+>    无限重发、停止等待——进入 step 4 用 `TaskStop` 强制终止它们**。靠重发指望
+>    flash agent 自己改邪归正是无效的；强制终止才是确定性的释放。
+> 4. **`TaskStop` 强制终止未优雅退出的 teammate（关键系统性修复，打破死结）。**
+>    `TeamDelete` 在**成员仍 active 时会失败**，而 flash teammate 不发
+>    `shutdown_response` 就会一直 active——这正是“几乎每次建 team 都有 agent 没
+>    释放干净”的死结。破解办法：对每个**仍未优雅退出**的非 lead teammate，用
+>    step 3 spawn 时记下的 **task_id** 调用 `TaskStop`（`{task_id: "<id>"}`）
+>    强制终止该后台任务。**这一步不依赖 agent 配合**，对叙述式假批准的 flash
+>    agent 同样有效。
+>    - 若没记到某 teammate 的 task_id：先 `TaskList` 枚举该 team 仍在跑的 teammate
+>      任务，取其 id 再 `TaskStop`。
+>    - **绝不要** `TaskStop` 主进程/编排者自己（team-lead）的任务——只 stop
+>      step 1 算出的非 lead targets。
+>    - 已经回了真正 structured `shutdown_response.approve=true` 的 teammate 无需
+>      再 `TaskStop`（它已在退出）；只对顽固未退出者强制终止。
+>    `TaskStop` 全部顽固 target 后，所有成员都不再 active，TeamDelete 才能成功。
+> 5. 调用 `TeamDelete` 收尾。**注意它可能返回 `"No team name found"` 而 no-op**
 >    （见下）——所以不能把它当判据。
-> 5. 运行 metadata cleanup 兜底：
+> 6. 运行 metadata cleanup 兜底：
 >    `./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team_name> --stale-only`。
-> 6. **验证拆除（以目录消失为准，给足回收时间，rm 是最后手段）**：
+> 7. **验证拆除（以目录消失为准，给足回收时间，rm 是最后手段）**：
 >    `ls -d ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>`。
 >    - 两个目录都不存在 → 拆除成功，结束。
 >    - 仍存在 → **先不要 rm。** approve 之后空 team 的目录回收有秒级~十几秒的
@@ -393,13 +420,18 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 >   独立进程，作为 `local_workflow` 任务跑在编排者**同一进程内**，其 CLI 面板由
 >   **磁盘上的 team 元数据 + 仍存活的 in-process task**渲染。`shutdown_request`
 >   只有在 agent 用 `SendMessage` 返回 `shutdown_response.approve=true` 后才会让
->   任务退出；空 team 被回收后面板才消失。**致命陷阱**：若 team 是在**会话边界/compact 之前**建立的，
+>   任务**优雅**退出；空 team 被回收后面板才消失。**但优雅退出不是唯一手段**：
+>   `TaskStop` 能**直接强制终止**这个 `local_workflow` 后台任务，**完全不依赖**
+>   agent 是否发 `shutdown_response`——这是治“flash agent 叙述式假批准、永不退出”
+>   的根本手段，比事后 `rm -rf` 元数据干净得多（`rm` 删的是元数据、可能留半死任务；
+>   `TaskStop` 真正停掉任务）。**致命陷阱**：若 team 是在**会话边界/compact 之前**建立的，
 >   continuation 后的会话**不再持有指向它的上下文指针**，此时 `TeamDelete` 直接
 >   返回 `"No team name found"` 并 **no-op**——既不报错也不删元数据，于是元数据
 >   长期残留、CLI 每次启动都把它渲染成可切换的孤儿面板。`pgrep` 对它恒为空、毫无
->   帮助。**唯一可靠的清理 = 先按名 `shutdown_request` 每个非 lead target，并要求
->   `shutdown_response.approve=true`，再以目录消失为判据，目录仍在则 `rm -rf`
->   兜底。**
+>   帮助。**最可靠的清理顺序 = (1) 先按名 `shutdown_request` 每个非 lead target
+>   给优雅退出的机会（要求 structured `shutdown_response.approve=true`）；(2) 对
+>   超时仍不退出的顽固 target 用 `TaskStop <task_id>` 强制终止（不依赖 agent 配合）；
+>   (3) `TeamDelete`；(4) 以目录消失为判据，仍残留才 `rm -rf` 兜底元数据。**
 
 Required specialists per step:
 
