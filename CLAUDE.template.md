@@ -256,8 +256,10 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
    向 team 中的其他 agent（math-theorist、numerical-debugger、flow-arch-reviewer、
    orthogonal-direction-scout）发送消息或接收其分析内容。所有 team 内部通讯
    仅发生在 team-leader 与各 specialist 之间。唯一例外是 teardown：收到
-   `[TEAM_COMPLETE]` 后，主程序必须按 team config 中的成员名单向每个成员发送
-   `shutdown_request`，这不是分析通讯，而是 session 释放协议。
+   `[TEAM_COMPLETE]` 后，主程序必须按 team config 中的成员名单向**非 lead 的
+   project agents** 发送 `shutdown_request`，这不是分析通讯，而是 session 释放
+   协议。**不要向 `team-lead` 发送 shutdown_request**：`team-lead` 是主进程/
+   编排者，等待它的 `shutdown_response` 会把主进程也纳入退出协议，导致流程卡住。
 
 6. **`team-leader` 内部机制。** `team-leader` 在启动时创建自己的 60 秒轮询
    cron（使用 `CronCreate`），在 cron 触发时检查缺失的 specialist 并发送
@@ -290,21 +292,28 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 > **团队拆除标准动作（TEARDOWN）。** 拆除一个 team 必须按下列顺序，**判据是
 > 磁盘上的 team/task 目录消失，而不是 `TeamDelete` 的返回值**：
 >
-> 1. **对每个成员逐个发 `shutdown_request`**（`SendMessage` to `<member-name>`，
->    `message:{type:"shutdown_request", reason:"..."}`）。成员名从
->    `~/.claude/teams/<team_name>/config.json` 的 `members[].name` 解析——这一步
->    **不依赖当前会话的 team 上下文指针**，所以即使跨会话/compact 之后也能送达。
-> 2. **等待结构化批准**：每个成员必须通过 `SendMessage` 回复请求方：
+> 1. **计算 teardown targets**：读取
+>    `~/.claude/teams/<team_name>/config.json`。从 `members[]` 中排除主进程/
+>    编排者，即满足任一条件的成员都**不是** shutdown target：
+>    `agentId == leadAgentId`、`agentType == "team-lead"`、`name == "team-lead"`。
+>    剩下的才是要释放的 project agents（例如 project-agent `team-leader`、
+>    `math-theorist`、`numerical-debugger`、`flow-arch-reviewer`、
+>    `orthogonal-direction-scout`）。B1/B3/F1 通常应等待 4 个 approval，B2
+>    通常应等待 2 个 approval；绝不是等待包含主进程在内的 5/5。
+> 2. **对每个 target 逐个发 `shutdown_request`**（`SendMessage` to
+>    `<member-name>`，`message:{type:"shutdown_request", reason:"..."}`）。
+>    这一步**不依赖当前会话的 team 上下文指针**，所以即使跨会话/compact 之后也能送达。
+> 3. **等待结构化批准**：每个 target 必须通过 `SendMessage` 回复请求方：
 >    `{"type":"shutdown_response","approve":true,"reason":"..."}`。自然语言
 >    “收到/确认”不算完成；没有 `shutdown_response.approve=true`，Claude Code
 >    可能会继续把该 teammate 渲染为 idle。最多等待 30 秒；未批准者再次发送
 >    `shutdown_request`，仍未批准则不要推进下一 team，提示需要人工处理或重启
 >    Claude CLI。
-> 3. 调用 `TeamDelete` 收尾。**注意它可能返回 `"No team name found"` 而 no-op**
+> 4. 调用 `TeamDelete` 收尾。**注意它可能返回 `"No team name found"` 而 no-op**
 >    （见下）——所以不能把它当判据。
-> 4. 运行 metadata cleanup 兜底：
+> 5. 运行 metadata cleanup 兜底：
 >    `./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team_name> --stale-only`。
-> 5. **验证拆除**：`ls -d ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>`。
+> 6. **验证拆除**：`ls -d ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>`。
 >    - 两个目录都不存在 → 拆除成功，结束。
 >    - 仍存在 → 先 `pgrep -fl -- '--agent-id'` 确认没有该 team 的残留进程
 >      （tmux/iTerm 后端才会有；in-process 后端恒为空）；确认无进程后，
@@ -329,7 +338,7 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 >   continuation 后的会话**不再持有指向它的上下文指针**，此时 `TeamDelete` 直接
 >   返回 `"No team name found"` 并 **no-op**——既不报错也不删元数据，于是元数据
 >   长期残留、CLI 每次启动都把它渲染成可切换的孤儿面板。`pgrep` 对它恒为空、毫无
->   帮助。**唯一可靠的清理 = 先按名 `shutdown_request` 每个成员，并要求
+>   帮助。**唯一可靠的清理 = 先按名 `shutdown_request` 每个非 lead target，并要求
 >   `shutdown_response.approve=true`，再以目录消失为判据，目录仍在则 `rm -rf`
 >   兜底。**
 

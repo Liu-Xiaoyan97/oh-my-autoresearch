@@ -309,9 +309,11 @@ true`, `TEARDOWN_REQUIRED`, and `NEXT_COMMAND`. No agent spawns another agent
 (no nesting); the debate content never enters the main turn.
 
 After `[TEAM_COMPLETE]`, the main turn must release the team before applying:
-send `shutdown_request` to every member listed in
-`~/.claude/teams/<team>/config.json` (including `team-leader`), require every
-member to reply via `SendMessage` with
+read `~/.claude/teams/<team>/config.json`, exclude the main/orchestrator member
+(`agentId == leadAgentId`, `agentType == "team-lead"`, or `name ==
+"team-lead"`), then send `shutdown_request` only to the remaining project
+agents. Do not send shutdown to `team-lead` and do not wait for its approval.
+Require each target to reply via `SendMessage` with
 `{{"type":"shutdown_response","approve":true}}`, call `TeamDelete`, and verify
 `~/.claude/teams/<team>/` plus
 `~/.claude/tasks/<team>/` are gone. In in-process mode, stale metadata keeps the

@@ -387,6 +387,14 @@ else
   exit 1
 fi
 
+if grep -Eq "leadAgentId|agentType == \"team-lead\"|name == \"team-lead\"" scripts/phases/phase_b_exploration.sh \
+  && grep -Eq "leadAgentId|agentType == \"team-lead\"|name == \"team-lead\"" scripts/phases/phase_f_checkpoint.sh; then
+  echo "PASS: phase prompts exclude the main team-lead from AgentTeam shutdown targets"
+else
+  echo "ERROR: phase prompts do not clearly exclude the main team-lead from shutdown targets" >&2
+  exit 1
+fi
+
 for file in "${phase_ef_refs[@]}"; do
   if [[ ! -f "$file" ]]; then
     echo "ERROR: missing file: $file" >&2

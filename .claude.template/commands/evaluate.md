@@ -41,10 +41,13 @@ polling before writing.
 When `team-leader` signals completion with a structured `[TEAM_COMPLETE]`
 message, parse its `TEAM_NAME`, `PHASE_STEP`, `RELEASE_SESSIONS`,
 `TEARDOWN_REQUIRED`, and `NEXT_COMMAND`. Before running the command, release
-every team member: send `shutdown_request` to each member listed in
-`~/.claude/teams/<team>/config.json` (including `team-leader`), require each
-member to reply via `SendMessage` with
-`{"type":"shutdown_response","approve":true}`, then call `TeamDelete`. In in-process mode, the CLI
+every non-lead project agent. Read `~/.claude/teams/<team>/config.json`, exclude
+the main/orchestrator member (`agentId == leadAgentId`,
+`agentType == "team-lead"`, or `name == "team-lead"`), then send
+`shutdown_request` only to the remaining project agents. Do not send shutdown
+to `team-lead` and do not wait for its approval. Require each target to reply via
+`SendMessage` with `{"type":"shutdown_response","approve":true}`, then call
+`TeamDelete`. In in-process mode, the CLI
 panel is rendered from the team/task metadata, so also verify
 `~/.claude/teams/<team>/` and `~/.claude/tasks/<team>/` are gone; if they remain
 after shutdown and `TeamDelete`, run

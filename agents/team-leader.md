@@ -133,7 +133,7 @@ specialists `SendMessage` their conclusions to you; you reconcile and write.
     TEAM_NAME: <team_name>
     PHASE_STEP: <B1|B2|B3|F1>
     RELEASE_SESSIONS: true
-    TEARDOWN_REQUIRED: Send shutdown_request to every member from config.json, require each member to SendMessage {"type":"shutdown_response","approve":true}, TeamDelete, then remove ~/.claude/teams/<team_name> and ~/.claude/tasks/<team_name> if they still exist.
+    TEARDOWN_REQUIRED: Exclude the main/orchestrator team-lead member (agentId == leadAgentId, agentType == "team-lead", or name == "team-lead"); send shutdown_request only to non-lead project agents; require each target to SendMessage {"type":"shutdown_response","approve":true}; TeamDelete; then remove ~/.claude/teams/<team_name> and ~/.claude/tasks/<team_name> if they still exist.
     NEXT_COMMAND: <see below>
     ```
     `NEXT_COMMAND` is:

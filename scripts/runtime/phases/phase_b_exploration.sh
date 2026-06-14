@@ -372,10 +372,12 @@ debate content stays inside the team and never enters the main turn.
 The main Claude turn must not manually replace the project-agent discussion, and
 must not absorb the debate content. Spawn the named peer agents, let
 `team-leader` record the consolidated outputs in this file, then wait for
-`[TEAM_COMPLETE]`. Before running `NEXT_COMMAND`, the main turn must release the
-team: send `shutdown_request` to every member listed in
-`~/.claude/teams/<team>/config.json` (including `team-leader`), require every
-member to reply via `SendMessage` with
+`[TEAM_COMPLETE]`. Before running `NEXT_COMMAND`, the main turn must release
+every non-lead project agent: read `~/.claude/teams/<team>/config.json`, exclude
+the main/orchestrator member (`agentId == leadAgentId`, `agentType ==
+"team-lead"`, or `name == "team-lead"`), then send `shutdown_request` only to
+the remaining project agents. Do not send shutdown to `team-lead` and do not
+wait for its approval. Require each target to reply via `SendMessage` with
 `{{"type":"shutdown_response","approve":true}}`, call `TeamDelete`, and verify
 `~/.claude/teams/<team>/` plus
 `~/.claude/tasks/<team>/` are gone. In in-process mode, stale metadata keeps the
