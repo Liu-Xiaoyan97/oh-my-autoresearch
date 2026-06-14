@@ -250,19 +250,31 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
      `[CONCLUSION] <agent-name>` format as the first line, and to return only a
      one-line ack to the orchestrator (no analysis content).
 
-4. **主程序不创建常驻监控 cron。** in-process 模式下，team 面板/session 的生命
-   周期必须由完成信号后的同步 teardown 驱动；不要再依赖 Stop hook 或主程序
-   监控 cron 把流程强行拉回主 turn。`team-leader` 自己已经有 60 秒 polling
-   cron，会催促未回传的 specialist，并在全部完成后取消该 cron。
+4. **主程序等待 team-leader：用 cron 轮询，绝不用 sleep。** 主程序 spawn 完
+   team 后就**结束本 turn**，等待 team-leader 的 `[TEAM_COMPLETE]` 把自己唤醒。
+   **严禁用前台 `sleep`（或 `sleep` + 轮询循环、`while sleep` 等）来等待**——
+   既浪费上下文，又会被 harness 阻断。若主程序需要主动确认进度或防止漏掉完成
+   信号，**必须用 `CronCreate` 建一个定时轮询任务**（例如每 3–5 分钟）来重新
+   唤醒主 turn、检查 `[TEAM_COMPLETE]` 是否到达；该轮询 cron 在收到
+   `[TEAM_COMPLETE]` / 完成 teardown 后必须立即 `CronDelete` 取消，绝不留下孤儿
+   cron。这与 `team-leader` 自己的 60 秒 specialist-催促 cron 是两个独立的 cron：
+   team-leader 那个负责催回传 `[CONCLUSION]` 并在全部到齐后自行取消。
 
-5. **主程序只与 team-leader 通讯。** 主程序（编排者）在任何时候都**不得**直接
+5. **主程序只与 team-leader 通讯，对其他 agent 保持沉默（耐心纪律）。**
+   收到 `[TEAM_COMPLETE]` **之前**，主程序**只应答 team-leader**。各 specialist
+   按 step 3 会向主程序回一行 ack；主程序被这些 ack、或 peer-DM 摘要、或任何
+   **非 team-leader** 的消息唤醒时，**绝不要应答、绝不要采取行动、绝不要催促或
+   追问** —— 直接结束本 turn，继续等待 team-leader 的 `[TEAM_COMPLETE]`。**不要
+   心急**：specialist 慢、ack 先到、debate 还没写完都是正常的，等待预算见上方
+   「耐心与重建不变量」（单 team 最长 20 分钟）。主程序在任何时候都**不得**直接
    向 team 中的其他 agent（math-theorist、numerical-debugger、flow-arch-reviewer、
-   orthogonal-direction-scout）发送消息或接收其分析内容。所有 team 内部通讯
-   仅发生在 team-leader 与各 specialist 之间。唯一例外是 teardown：收到
-   `[TEAM_COMPLETE]` 后，主程序必须按 team config 中的成员名单向**非 lead 的
-   project agents** 发送 `shutdown_request`，这不是分析通讯，而是 session 释放
-   协议。**不要向 `team-lead` 发送 shutdown_request**：`team-lead` 是主进程/
-   编排者，等待它的 `shutdown_response` 会把主进程也纳入退出协议，导致流程卡住。
+   orthogonal-direction-scout）发送消息或接收其分析内容；所有 team 内部通讯
+   仅发生在 team-leader 与各 specialist 之间。**唯一例外是 teardown**：收到
+   `[TEAM_COMPLETE]`、确认要解散团队后，主程序才可以按 team config 中的成员名单
+   向**非 lead 的 project agents** 发送 `shutdown_request`（确认信息），这不是
+   分析通讯，而是 session 释放协议。**不要向 `team-lead` 发送 shutdown_request**：
+   `team-lead` 是主进程/编排者，等待它的 `shutdown_response` 会把主进程也纳入
+   退出协议，导致流程卡住。
 
 6. **`team-leader` 内部机制。** `team-leader` 在启动时创建自己的 60 秒轮询
    cron（使用 `CronCreate`），在 cron 触发时检查缺失的 specialist 并发送
@@ -270,11 +282,12 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
    （`CronDelete`），整理写入 debate 文件，然后向主程序发送 `[TEAM_COMPLETE]`
    消息，里面包含 `NEXT_COMMAND`。
 
-7. **主程序收到 `[TEAM_COMPLETE]` 后同步清理并推进。** 不写
-   `.cron_team_completed`，不等待 Stop hook 重新唤醒自己。主程序必须：
+7. **主程序收到 `[TEAM_COMPLETE]` 后同步清理并推进。** 没有 Stop hook、没有标记
+   文件——完成信号就是 team-leader 这条 `[TEAM_COMPLETE]` 消息本身。主程序必须：
 
    a. 解析 `TEAM_NAME`、`PHASE_STEP`、`RELEASE_SESSIONS`、`TEARDOWN_REQUIRED`、
       `NEXT_COMMAND`。若缺任一字段，视为无效完成信号，要求 team-leader 重发。
+      若 step 4 建了轮询 cron，立即 `CronDelete` 取消它。
    b. 执行本节末尾的「团队拆除标准动作（TEARDOWN）」；尤其在 in-process
       模式下，必须确认 `~/.claude/teams/<team_name>/` 与
       `~/.claude/tasks/<team_name>/` 两个目录均已消失，否则 CLI 面板仍会显示
@@ -459,8 +472,11 @@ Compare current experiment results against `runtime/experiments/best.json`.
      `math-theorist`, `numerical-debugger`, and `flow-arch-reviewer` as PEERS,
      in the background. Specialists `SendMessage` `[CONCLUSION]` to
      `team-leader`; main turn only receives one-line acks.
-  4. **不要创建主程序常驻监控 cron**，也不要依赖 Stop hook 强制回主进程。
-     等待 team-leader 的 `[TEAM_COMPLETE]` 信号。
+  4. **沉默纪律 + cron 轮询（同 Phase B step 4/5）**：收到 `[TEAM_COMPLETE]`
+     之前主程序**只应答 team-leader**，被 specialist 的 ack 或任何非 team-leader
+     消息唤醒时不应答、不行动、直接结束本 turn 继续等待。**绝不用前台 `sleep`
+     等待**；若需主动检查进度，用 `CronCreate` 建定时轮询、收到信号后
+     `CronDelete`。等待 team-leader 的 `[TEAM_COMPLETE]` 信号。
   5. 收到 `[TEAM_COMPLETE]` 后，先对 F1 team 执行 TEARDOWN（确认
      `~/.claude/teams/<team>/`、`~/.claude/tasks/<team>/` 目录消失，目录残留则
      `rm -rf` 兜底），然后运行消息中的
