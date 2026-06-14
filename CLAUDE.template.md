@@ -325,17 +325,26 @@ Orchestration procedure (per team-leader step — B1, then B2, then B3):
 >    ```
 >    自然语言“收到/确认”不算完成；把 JSON 放进字符串正文也不算完成。没有
 >    structured-object `shutdown_response.approve=true`，Claude Code
->    可能会继续把该 teammate 渲染为 idle。最多等待 30 秒；未批准者再次发送
->    `shutdown_request`，仍未批准则不要推进下一 team，提示需要人工处理或重启
->    Claude CLI。
+>    可能会继续把该 teammate 渲染为 idle。**给足退出时间——30 秒往往不够。**
+>    in-process teammate 在 approve 之后还要若干秒才真正 winding-down，多个
+>    agent 串行退出会叠加；**轮询等待最长 2 分钟**（每 ~10–15 秒查一次回执），
+>    对仍未回 `shutdown_response.approve=true` 的 target **重发
+>    `shutdown_request`**（同一 request_id）。2 分钟内全部 approve 即视为通过；
+>    只有超过 2 分钟仍有 target 不 approve，才不要推进下一 team、提示人工处理或
+>    重启 Claude CLI。**不要因为某个 agent 慢就提前放弃或提前 rm。**
 > 4. 调用 `TeamDelete` 收尾。**注意它可能返回 `"No team name found"` 而 no-op**
 >    （见下）——所以不能把它当判据。
 > 5. 运行 metadata cleanup 兜底：
 >    `./scripts/cleanup_agentteam_metadata.py --yes --remove-team <team_name> --stale-only`。
-> 6. **验证拆除**：`ls -d ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>`。
+> 6. **验证拆除（以目录消失为准，给足回收时间，rm 是最后手段）**：
+>    `ls -d ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>`。
 >    - 两个目录都不存在 → 拆除成功，结束。
->    - 仍存在 → 先 `pgrep -fl -- '--agent-id'` 确认没有该 team 的残留进程
->      （tmux/iTerm 后端才会有；in-process 后端恒为空）；确认无进程后，
+>    - 仍存在 → **先不要 rm。** approve 之后空 team 的目录回收有秒级~十几秒的
+>      延迟（in-process task 退出 + 空 team 被回收是异步的）；**轮询等待最长
+>      2 分钟**（每 ~10–15 秒 `ls` 一次），让目录自然消失——**优雅回收永远优先于
+>      强删**，强删一个尚未退出的 task 的元数据会留下半死状态。
+>    - 仍存在且已过 2 分钟 → 先 `pgrep -fl -- '--agent-id'` 确认没有该 team 的
+>      残留进程（tmux/iTerm 后端才会有；in-process 后端恒为空）；确认无进程后，
 >      **`rm -rf ~/.claude/teams/<team_name> ~/.claude/tasks/<team_name>` 兜底删除**
 >      元数据，再复查目录已消失。
 >
