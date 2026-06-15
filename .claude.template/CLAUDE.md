@@ -14,6 +14,12 @@
   `general_purpose`、`general-purpose` 或任何未在 `.claude/agents/` 注册的 agent
   类型**。如果指定 agent 不可用，必须停止并报告配置错误，不得降级到通用 agent。
 - **训练等长任务只能通过 `runtime/scripts/training/*` 驱动**：`generate_launch.sh` → `start_training.sh` → `monitor_training.py`。**严禁主程序自己用 `uv` / `python` / `nohup` 直跑训练或自造启动/监控命令**——必须且只能调用既定脚本。
+- **主程序不可修复训练脚本或启动脚本**：如果 `generate_launch.sh` 生成的
+  `<project_root>/launchscripts/launch_<exp_name>.sh` 无法执行、`start_training.sh` 启动失败、
+  或训练入口参数不兼容，team-lead 必须通过 observer `state` 事件回退到
+  `current_step=5,next_step=6`，然后只拉起 `coder` 修复 `objective.project_root` 下的被优化项目
+  训练入口。**严禁 team-lead 修改任何文件，也严禁要求 coder 修改 `generate_launch.sh` 或
+  生成的 `launch_<exp_name>.sh`**。
 - **对 nohup 后台长任务（如训练）的"等待 / 轮询"必须用 Claude Code CLI 内部 cron（`CronCreate` 建、`CronDelete` 销）**；**严禁前台 `sleep`，以及 `sleep`+循环、`while sleep`、`sleep && ...` 等任何阻塞轮询**（此为严重违规）。
 - **但对 subagent（前台 `Task`/Agent 调用）不适用 cron**：subagent 调用本身就阻塞主程序直到它返回，主程序只需等待返回值，**不轮询、不查询、不建 cron**。cron 仅用于主程序无法靠"调用返回"感知结束的后台任务。
 
@@ -109,6 +115,12 @@
       (nohup 后台运行,**立即返回 PID**,日志写 `runtime/logs/train-of-<exp_name>.log`)。
       启动成功 → 状态 7:emit observer `log` 事件"训练启动完成" + `state` 事件让 observer
       写 states.json `current_step=7, next_step=8`(team-lead 不自己写)。
+      如果生成的 launcher 不可执行、训练入口脚本不存在、参数不兼容或 `start_training.sh`
+      返回非 0：立即 emit observer `log` 事件记录启动失败原因，emit `state` 事件回退
+      `current_step=5,next_step=6`，随后拉起注册 subagent `coder`，把错误日志、launcher
+      stderr/stdout 和 objective 传给它。`coder` 只能修改被优化项目的启动 Python/脚本入口，
+      使其兼容 `generate_launch.sh` 和生成的 `launch_<exp_name>.sh`；不得修改 runtime 脚本或
+      `launchscripts/` 里的生成物。
    c. **启动后立刻 `CronCreate` 建一个定时轮询任务**(例如每 N 分钟),每次触发运行
       `runtime/scripts/training/monitor_training.py runtime <exp_name>` 解析进度并唤醒
       team-lead 检查。**绝不允许**用前台 `sleep`、`while sleep`、`sleep && monitor`
@@ -121,8 +133,18 @@
    - **只调用 `summarizer` 协调者**（嵌套）：它用 `Task` 嵌套 spawn 三个 reviewer
      做 recovery analysis、在自己上下文里汇总，**只把 recovery-summary JSON 返回
      给你**。你不要自己直接调 reviewers。
-   - 校验 recovery-summary（`recovery-summary.schema.json`）后，通过 observer 更新
-     learned/rejected/baseline。
+   - 校验 recovery-summary（`recovery-summary.schema.json`）后，team-lead 读取 experiments
+     中当前实验与 baseline 的主指标，按 `objective.primary_metrics.mode`
+     判断是否优于 baseline，并且**必须通过 observer knowledge event 完成写入**：
+     - 优于 baseline：emit `knowledge` `append_learned` 写 learned.json；再 emit `knowledge`
+       `update_baseline` 写 baseline.json（数据必须包含 `exp_name` 与 `method_summary`，并保留
+       主指标信息）；写日志"`<exp_name>成为新的基线方法`"；emit `state`
+       `current_step=9,next_step=0`。
+     - 与 baseline 持平：emit `knowledge` `append_learned`；写日志"`<exp_name>经验已收录`"；
+       emit `state` `current_step=9,next_step=0`。
+     - 逊于 baseline：emit `knowledge` `append_rejected`；写日志"`<exp_name>经验已收录被否决`"；
+       emit `state` `current_step=9,next_step=0`。
+     如果 `update_baseline` dispatch 返回失败，必须停止并报告，不得进入下一轮。
    - **一轮迭代完成后必须立即开启第二轮迭代**：emit `state` 事件把
      `current_step=0,next_step=1,iteration=<上一轮+1>,exp_name=exp_<新 iteration>` 写入
      `runtime/states/states.json`，随后立刻从 Phase 0 开始下一轮 `/loop`，不等待用户再次

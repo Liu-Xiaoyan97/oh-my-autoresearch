@@ -3,7 +3,7 @@
   "title": "Knowledge Write Schema",
   "description": "约束写入 knowledge JSON 的事件 payload",
   "type": "object",
-  "required": ["action", "target_file"],
+  "required": ["action"],
   "properties": {
     "action": {
       "type": "string",

@@ -23,6 +23,17 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 5. 用 `git add` + `git commit` 提交本次代码变更。
 6. 返回 commit result JSON（含最近一次提交的 commit id）。
 
+## 编辑范围硬约束
+
+- 你只能编辑 `runtime/states/objective.json` 中 `"project_root"` 指向目录下的文件。
+- 你不能编辑、创建或删除 `<project_root>/launchscripts/` 目录下的任何文件。
+- 你不能编辑 `runtime/`、`.claude/`、`agent-system/oh-my-autoresearch/`、`generate_launch.sh`、
+  `start_training.sh`，也不能编辑生成的 `launch_<exp_name>.sh`。
+- 当 launch script 无法执行、训练入口不存在或参数不兼容时，你只能修改被优化项目自身的
+  启动 Python/脚本入口，使它能接受 `--num_training_steps` 和 `--eval_n_steps`，并兼容
+  `generate_launch.sh` 生成的 launcher。
+- 如果必要改动超出上述范围，必须返回失败 JSON，说明越界原因，不能自行扩大权限。
+
 ## 输入
 
 - summarizer 的 decision（票选最高方法描述）

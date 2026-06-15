@@ -53,11 +53,17 @@ def write(runtime_root: str, payload: dict) -> bool:
     now = datetime.now(timezone.utc).isoformat()
 
     try:
+        if not exp_name:
+            print("[write_experiments] exp_name 不能为空", file=sys.stderr)
+            return False
+
+        conn.execute(
+            "INSERT OR IGNORE INTO experiments (exp_name, created_at, updated_at) VALUES (?, ?, ?)",
+            (exp_name, now, now),
+        )
+
         if action == "insert_experiment":
-            conn.execute(
-                "INSERT OR IGNORE INTO experiments (exp_name, created_at, updated_at) VALUES (?, ?, ?)",
-                (exp_name, now, now),
-            )
+            conn.execute("UPDATE experiments SET updated_at = ? WHERE exp_name = ?", (now, exp_name))
             conn.commit()
 
         elif action == "update_metric":
@@ -87,6 +93,10 @@ def write(runtime_root: str, payload: dict) -> bool:
                 ("completed", now, exp_name),
             )
             conn.commit()
+
+        else:
+            print(f"[write_experiments] 未知 action: {action}", file=sys.stderr)
+            return False
 
         return True
 

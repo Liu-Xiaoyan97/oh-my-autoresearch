@@ -3,6 +3,7 @@
 
 import json
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,24 +39,32 @@ def write(runtime_root: str, payload: dict) -> bool:
     now = datetime.now(timezone.utc).isoformat()
 
     try:
+        if not exp_name:
+            print("[write_exploration] exp_name 不能为空", file=sys.stderr)
+            return False
+
+        conn.execute(
+            "INSERT OR IGNORE INTO exploration (exp_name, created_at, updated_at) VALUES (?, ?, ?)",
+            (exp_name, now, now),
+        )
+
         if action == "insert_exploration":
-            conn.execute(
-                "INSERT OR IGNORE INTO exploration (exp_name, created_at, updated_at) VALUES (?, ?, ?)",
-                (exp_name, now, now),
-            )
+            conn.execute("UPDATE exploration SET updated_at = ? WHERE exp_name = ?", (now, exp_name))
             conn.commit()
 
         elif action == "update_orthogonal_candidates":
+            value = data.get("orthogonal_direction_scout", data)
             conn.execute(
                 "UPDATE exploration SET orthogonal_direction_scout = ?, updated_at = ? WHERE exp_name = ?",
-                (json.dumps(data, ensure_ascii=False), now, exp_name),
+                (json.dumps(value, ensure_ascii=False), now, exp_name),
             )
             conn.commit()
 
         elif action == "update_decision":
+            value = data.get("decision", data)
             conn.execute(
                 "UPDATE exploration SET decision = ?, updated_at = ? WHERE exp_name = ?",
-                (json.dumps(data, ensure_ascii=False), now, exp_name),
+                (json.dumps(value, ensure_ascii=False), now, exp_name),
             )
             conn.commit()
 
@@ -65,6 +74,10 @@ def write(runtime_root: str, payload: dict) -> bool:
                 (data.get("commit_id", ""), now, exp_name),
             )
             conn.commit()
+
+        else:
+            print(f"[write_exploration] 未知 action: {action}", file=sys.stderr)
+            return False
 
         return True
 

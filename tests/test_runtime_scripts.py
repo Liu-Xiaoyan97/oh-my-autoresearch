@@ -114,6 +114,74 @@ def test_observer_dispatch_writes_log_and_dynamic_metric(tmp_path):
     assert (runtime / "observations" / "exp_0.log").read_text(encoding="utf-8") == "[2026-06-15 00:00:00]|[INFO]-ok\n"
 
 
+def test_observer_exploration_and_experiment_updates_upsert_rows(tmp_path):
+    runtime = copy_runtime(tmp_path)
+    run("python3", str(runtime / "scripts" / "database" / "init_db.py"), str(runtime))
+    dispatch = runtime / "observer" / "scripts" / "dispatch" / "dispatch_event.py"
+
+    run(
+        "python3",
+        str(dispatch),
+        str(runtime),
+        json.dumps({
+            "event_type": "exploration",
+            "payload": {
+                "action": "update_orthogonal_candidates",
+                "exp_name": "exp_2",
+                "data": {"orthogonal_direction_scout": {"candidates": [{"name": "x"}]}},
+            },
+        }),
+    )
+    run(
+        "python3",
+        str(dispatch),
+        str(runtime),
+        json.dumps({
+            "event_type": "experiments",
+            "payload": {
+                "action": "update_metric",
+                "exp_name": "exp_2",
+                "data": {"train_step": 10, "val_step": 10, "val_metric": 0.9},
+            },
+        }),
+    )
+
+    with sqlite3.connect(runtime / "db" / "runtime.sqlite") as conn:
+        exploration = conn.execute(
+            "SELECT orthogonal_direction_scout FROM exploration WHERE exp_name='exp_2'"
+        ).fetchone()
+        experiment = conn.execute(
+            "SELECT train_step, val_step, val_metric, step_10 FROM experiments WHERE exp_name='exp_2'"
+        ).fetchone()
+
+    assert exploration is not None
+    assert json.loads(exploration[0]) == {"candidates": [{"name": "x"}]}
+    assert experiment == (10, 10, 0.9, 0.9)
+
+
+def test_observer_knowledge_update_baseline_defaults_target_file(tmp_path):
+    runtime = copy_runtime(tmp_path)
+    dispatch = runtime / "observer" / "scripts" / "dispatch" / "dispatch_event.py"
+
+    run(
+        "python3",
+        str(dispatch),
+        str(runtime),
+        json.dumps({
+            "event_type": "knowledge",
+            "payload": {
+                "action": "update_baseline",
+                "data": {"exp_name": "exp_2", "method_summary": "better"},
+            },
+        }),
+    )
+
+    assert json.loads((runtime / "knowledges" / "baseline.json").read_text(encoding="utf-8")) == {
+        "exp_name": "exp_2",
+        "method_summary": "better",
+    }
+
+
 def test_observer_log_filters_hook_noise(tmp_path):
     runtime = copy_runtime(tmp_path)
     dispatch = runtime / "observer" / "scripts" / "dispatch" / "dispatch_event.py"
