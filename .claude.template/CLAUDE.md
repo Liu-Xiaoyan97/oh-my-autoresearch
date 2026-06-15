@@ -39,14 +39,50 @@
    - 调用 `runtime/scripts/validate/validate_runtime.py runtime`。
    - 调用 `runtime/scripts/git/check_clean.sh <project_root>`。
    - 通过 observer 写入启动校验、校验通过或错误日志。
-3. 若进入 Phase 1（方向探索），**只调用 `summarizer` 一个协调者 subagent**（嵌套）：
-   - `summarizer` 会用 `Task` 嵌套 spawn `orthogonal-direction-scout` 与三个
-     reviewer（`math-theorist`、`numerical-debugger`、`flow-arch-reviewer`），在它
-     自己的上下文里汇总，**只把最终 decision JSON 返回给你**。
-   - 你**绝不要**自己直接调 scout / reviewers——它们是 summarizer 的嵌套子
-     subagent，其原始输出**不进入你的上下文**（这是"不污染主程序"的关键）。
-   - 校验 summarizer 返回的 decision JSON（`decision.schema.json`）后再进入下一步。
-   - 随后进入 Phase 2（代码修改）时再调用 `coder`。
+3. 若进入 Phase 1（方向探索 → 票选 → 代码 → 同步），team-lead 创建**嵌套结构**的
+   subagent，并**串行**驱动三个第一层 subagent：`orthogonal-direction-scout` →
+   `summarizer` → `coder`。scout 与 summarizer 各自用 `Task` **并行**嵌套 spawn 第二层
+   reviewer；team-lead **绝不**自己直接调 reviewer（二级输出不进 team-lead 上下文）。
+
+   嵌套结构：
+
+   ```
+   team-lead
+     ├── orthogonal-direction-scout   # 去重得正交候选集 → 交给 summarizer
+     │   ├── flow-arch-reviewer        # 架构角度找优化点  (二级，并行)
+     │   ├── math-theorist             # 数学角度找优化点  (二级，并行)
+     │   └── numerical-debugger        # 数值角度找优化点  (二级，并行)
+     ├── summarizer                    # 票选候选集 → 最高票方法 → 交给 coder
+     │   ├── flow-arch-reviewer        # 架构角度评分      (二级，并行)
+     │   ├── math-theorist             # 数学角度评分      (二级，并行)
+     │   └── numerical-debugger        # 数值角度评分      (二级，并行)
+     └── coder                         # 实施最高票方法、冒烟测试、generate_launch、
+                                       #   建 train 日志、git 提交 (一级叶子，无嵌套)
+   ```
+
+   - **创建嵌套结构后**，通过 observer 写日志"两级 subagent 创建成功"。
+   - **一级串行、二级并行**：scout 销毁后才轮到 summarizer、summarizer 销毁后才轮到
+     coder；每个一级 subagent 内部的三个 reviewer 并行。
+
+   每个一级 subagent **销毁（返回）后**由 team-lead 推进状态（exp_name=`<exp_name>`）：
+
+   a. **scout 销毁 → 状态 3**：校验其 orthogonal-set JSON；emit `exploration` 事件
+      `action=update_orthogonal_candidates`、`data.orthogonal_direction_scout=<去重后正交候选集>`；
+      写日志"正交候选集生成完成"；states.json 更新为 `current_step=3, next_step=4`。
+   b. **summarizer 销毁 → 状态 4**：校验其 decision JSON；emit `exploration` 事件
+      `action=update_decision`、`data.decision=<票选最高方法>`；写日志"票选最高方法完成"；
+      states.json `current_step=4, next_step=5`。
+   c. **coder 销毁 → 状态 5**：校验其 commit-result JSON；emit `exploration` 事件
+      `action=update_commit`、`data.commit_id=<最近一次提交 commit id>`；写日志"代码变更完成"；
+      states.json `current_step=5, next_step=6`。
+   d. **所有 subagent 销毁后 → 状态 6**：ssh 登录跳板机、从远程仓库同步代码；写日志
+      "代码上传成功"；states.json `current_step=6, next_step=7`。
+
+   **恢复守卫**：当 `current_step ∈ {3,4,5}` 时，team-lead 检查该步对应的下一个一级
+   嵌套 subagent 是否存在，不存在则补拉，保证管线跨会话/重启可续：
+   - `current_step=3` ⇒ 拉起 `summarizer`（产出状态 4）。
+   - `current_step=4` ⇒ 拉起 `coder`（产出状态 5）。
+   - `current_step=5` ⇒ 无嵌套 agent，直接执行 ssh 同步（产出状态 6）。
 4. 若进入训练阶段：
    - 调用 `runtime/scripts/training/generate_launch.sh runtime`。
    - 调用 `runtime/scripts/training/start_training.sh runtime <exp_name>`。
@@ -77,24 +113,24 @@ payload 必须符合 `runtime/observer/schemas/*.schema.json`。
 
 ## Subagent 返回（嵌套结构）
 
-调用层级：
+调用层级（两级）：
 
-- **主程序（team-lead）只直接调用第一层 subagent**：Phase 1/9 调 `summarizer`，
-  Phase 2 调 `coder`。
-- **`summarizer` 是协调者**，它用 `Task` 嵌套 spawn 第二层 subagent
-  （`orthogonal-direction-scout` + 三个 reviewer），消化它们的 JSON，**只向主程序
-  返回一份汇总 JSON**。scout/reviewer 的输出是 summarizer 的内部输入，**不回主程序**。
+- **team-lead 直接、串行调用三个第一层 subagent**：`orthogonal-direction-scout` →
+  `summarizer` → `coder`。
+- **scout 与 summarizer 各自是第二层 reviewer 的协调者**：用 `Task` **并行**嵌套 spawn
+  `flow-arch-reviewer` + `math-theorist` + `numerical-debugger`，在自己上下文里消化它们
+  的 JSON，**只向 team-lead 返回一份汇总 JSON**。reviewer 的原始输出**不回 team-lead**
+  （scout 收到的是"找优化点"proposal，summarizer 收到的是"评分"vote）。
+- **coder 是第一层叶子**，不嵌套子 subagent。
 
-主程序需要校验的 JSON（第一层返回）：
-
-- `summarizer` Phase 1: `decision.schema.json`
-- `summarizer` Phase 9: `recovery-summary.schema.json`
-- `coder`: `commit-result.schema.json` 或阶段内指定 schema
-
-summarizer 内部校验的 JSON（第二层，不回主程序）：
+team-lead 需要校验的 JSON（第一层返回）：
 
 - `orthogonal-direction-scout`: `orthogonal-set.schema.json`
-- reviewer proposal/vote/recovery: 对应 agent schema
+- `summarizer` Phase 1: `decision.schema.json`；Phase 9: `recovery-summary.schema.json`
+- `coder`: `commit-result.schema.json`
+
+第二层 reviewer 的 proposal / vote / recovery 由调用它的 scout / summarizer **内部校验**，
+不回 team-lead。
 
 如果第一层校验失败，停止推进当前阶段，记录 observer log，并向用户说明需要修正的
 结构化输出。
