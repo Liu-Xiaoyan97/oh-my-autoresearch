@@ -35,7 +35,8 @@
       "Shell",
       "TaskCreate",
       "TaskUpdate"
-    ]
+    ],
+    "defaultMode": "bypassPermissions"
   },
   "observer": {
     "lifecycle": {
