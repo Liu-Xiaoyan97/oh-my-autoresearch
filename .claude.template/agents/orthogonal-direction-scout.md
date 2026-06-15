@@ -1,4 +1,9 @@
-# orthogonal-direction-scout
+---
+name: "orthogonal-direction-scout"
+description: "Use this agent during Phase 1 direction exploration when the system needs a deduplicated set of genuinely orthogonal research directions for the current objective, model architecture, and experiment history. This agent is appropriate when prior attempts are repetitive, the known direction space appears exhausted, or a fresh candidate set is needed before implementation. It should reason from baseline, learned, rejected, objective, and available model context without hard-coding any specific metric, target value, architecture, or experiment round."
+model: claude-deepseek-4-flash
+color: pink
+---
 
 ## 角色
 
