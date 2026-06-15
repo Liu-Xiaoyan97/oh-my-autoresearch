@@ -11,10 +11,12 @@ def copy_runtime(tmp_path):
     project = tmp_path / "project" / "nn-architecture"
     shutil.copytree(REPO_ROOT / "runtime.template", runtime)
     project.mkdir(parents=True)
+    (project / "train.py").write_text("print('train')\n", encoding="utf-8")
     shutil.copy(runtime / "states" / "objective.example.json", runtime / "states" / "objective.json")
     objective_path = runtime / "states" / "objective.json"
     objective = json.loads(objective_path.read_text(encoding="utf-8"))
     objective["project_root"] = "project/nn-architecture"
+    objective["devices"] = ["cuda:0", "cuda:1"]
     objective_path.write_text(json.dumps(objective, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return runtime
 
@@ -39,8 +41,13 @@ def test_validate_runtime_and_generate_launch(tmp_path):
     assert launch_path == str(launch_file)
     assert launch_file.exists()
     launch_content = launch_file.read_text(encoding="utf-8")
-    assert f'cd "{runtime.parent / "project" / "nn-architecture"}"' in launch_content
-    assert "python train.py --config config.yaml --num_training_steps 10000 --eval_n_steps 1000" in launch_content
+    assert f"PROJECT_ROOT={runtime.parent / 'project' / 'nn-architecture'}" in launch_content
+    assert "TRAINING_SCRIPT=train.py" in launch_content
+    assert "TRAINING_ARGS=(--num_training_steps 10000 --eval_n_steps 1000)" in launch_content
+    assert "TRAINING_DEVICES=(cuda:0 cuda:1)" in launch_content
+    assert "export AUTORESEARCH_DEVICES=cuda:0,cuda:1" in launch_content
+    assert "export CUDA_VISIBLE_DEVICES=0,1" in launch_content
+    assert 'exec python "$SCRIPT_PATH" "${TRAINING_ARGS[@]}"' in launch_content
 
 
 def test_training_log_parser_reports_primary_metric(tmp_path):
