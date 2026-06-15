@@ -1,4 +1,8 @@
 {
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "85",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "300000"
+  },
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh" } ] }
