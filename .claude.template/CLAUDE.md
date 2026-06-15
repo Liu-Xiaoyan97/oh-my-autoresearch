@@ -9,6 +9,8 @@
 - 你不直接写 SQLite、knowledge JSON 或 observation log；这些写入必须通过 `runtime/observer/scripts/ingest/emit_event.py`。
 - subagents 只返回结构化 JSON；你必须用 `.claude/scripts/validate_subagent_result.py` 校验后再进入下一步。
 - observer 是 sidecar，不是 subagent；不要把 observer 当成 Agent 调用。
+- **训练等长任务只能通过 `runtime/scripts/training/*` 驱动**：`generate_launch.sh` → `start_training.sh` → `monitor_training.py`。**严禁主程序自己用 `uv` / `python` / `nohup` 直跑训练或自造启动/监控命令**——必须且只能调用既定脚本。
+- **任何"等待 / 轮询"都必须用 Claude Code CLI 内部 cron（`CronCreate` 建、`CronDelete` 销）**；**严禁前台 `sleep`，以及 `sleep`+循环、`while sleep`、`sleep && ...` 等任何阻塞轮询**（此为严重违规）。
 
 ## 状态机
 
@@ -83,10 +85,24 @@
    - `current_step=3` ⇒ 拉起 `summarizer`（产出状态 4）。
    - `current_step=4` ⇒ 拉起 `coder`（产出状态 5）。
    - `current_step=5` ⇒ 无嵌套 agent，直接执行 ssh 同步（产出状态 6）。
-4. 若进入训练阶段：
-   - 调用 `runtime/scripts/training/generate_launch.sh runtime`。
-   - 调用 `runtime/scripts/training/start_training.sh runtime <exp_name>`。
-   - 用 `runtime/scripts/training/monitor_training.py runtime <exp_name>` 解析进度。
+4. 若进入训练阶段（`current_step=6` → 7 → 8）。**本阶段两条硬规约,违反即视为严重错误**:
+   ① **只能通过 runtime 脚本驱动训练,严禁主程序自己改用 `uv` / `python` / `nohup`
+   直跑训练或自建启动命令**;② **训练启动后必须立即用 Claude Code CLI 内部 cron
+   (`CronCreate`) 轮询进度,严禁用前台 `sleep`(或 `sleep`+循环、`while sleep`、
+   `sleep && ...`)等待训练。**
+
+   a. 调用 `runtime/scripts/training/generate_launch.sh runtime` 生成真实启动脚本。
+   b. 调用 `runtime/scripts/training/start_training.sh runtime <exp_name>` 启动训练
+      (nohup 后台运行,**立即返回 PID**,日志写 `runtime/logs/train-of-<exp_name>.log`)。
+      启动成功 → 状态 7:写 observer 日志"训练启动完成";states.json
+      `current_step=7, next_step=8`。
+   c. **启动后立刻 `CronCreate` 建一个定时轮询任务**(例如每 N 分钟),每次触发运行
+      `runtime/scripts/training/monitor_training.py runtime <exp_name>` 解析进度并唤醒
+      team-lead 检查。**绝不允许**用前台 `sleep`、`while sleep`、`sleep && monitor`
+      之类的轮询循环,也不允许自己用 `uv run`/`python` 跑训练或监控。
+   d. cron 每次触发读 monitor 输出判断训练是否结束/失败。训练结束 → 状态 8:
+      **立即 `CronDelete` 取消该轮询 cron**(绝不留孤儿 cron);写 observer 日志
+      "训练结束";states.json `current_step=8, next_step=9`;进入 Phase 9。
 5. 若训练结束或失败，进入 Phase 9 经验回收：
    - **只调用 `summarizer` 协调者**（嵌套）：它用 `Task` 嵌套 spawn 三个 reviewer
      做 recovery analysis、在自己上下文里汇总，**只把 recovery-summary JSON 返回
