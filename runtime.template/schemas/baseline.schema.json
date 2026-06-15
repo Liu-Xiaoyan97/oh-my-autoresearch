@@ -3,21 +3,9 @@
   "title": "Baseline Schema",
   "description": "约束 runtime/knowledges/baseline.json",
   "type": "object",
-  "required": ["method", "primary_metric"],
+  "required": ["exp_name", "method_summary"],
   "properties": {
-    "method": { "type": "string" },
-    "architecture": { "type": "string" },
-    "command": { "type": "string" },
-    "devices": { "type": "array", "items": { "type": "string" } },
-    "primary_metric": {
-      "type": "object",
-      "required": ["name", "value"],
-      "properties": {
-        "name": { "type": "string" },
-        "value": { "type": "number" }
-      }
-    },
-    "training_steps": { "type": "integer" },
-    "notes": { "type": "string" }
+    "exp_name": { "type": "string" },
+    "method_summary": { "type": "string" }
   }
 }

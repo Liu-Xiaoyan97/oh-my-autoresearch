@@ -5,13 +5,11 @@
   "type": "array",
   "items": {
     "type": "object",
-    "required": ["method", "category", "reason", "metric"],
+    "required": ["exp_name", "method_summary", "reason"],
     "properties": {
-      "method": { "type": "string" },
-      "category": { "type": "string" },
-      "reason": { "type": "string" },
-      "metric": { "type": "number" },
-      "timestamp": { "type": "string", "format": "date-time" }
+      "exp_name": { "type": "string" },
+      "method_summary": { "type": "string" },
+      "reason": { "type": "string" }
     }
   }
 }

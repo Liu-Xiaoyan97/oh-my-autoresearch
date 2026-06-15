@@ -64,7 +64,7 @@ ls -la runtime/db/
 python runtime/scripts/validate/validate_baseline.py
 ```
 
-**解决**: 确保 baseline.json 包含完整的评估字段（primary_metrics、command、devices 等）。
+**解决**: 确保 baseline.json 包含必要字段（exp_name、method_summary）。
 
 ## Git Dirty
 

@@ -5,21 +5,14 @@
     ],
     "SessionEnd": [
       { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop.sh" } ] }
-    ],
-    "PreToolUse": [
-      { "matcher": "", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-tool-use.sh" } ] }
-    ],
-    "PostToolUse": [
-      { "matcher": "", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-tool-use.sh" } ] }
     ]
   },
   "permissions": {
     "policy": "strict",
+    "_comment": "主程序(team-lead)工具白名单。team-lead 无任何直接写权：不含 Write/Edit/MultiEdit/NotebookEdit。所有日志/数据库/状态写入都通过 observer event 落盘。代码文件由 coder subagent 负责写(coder 有自己的工具继承，不受此主程序白名单约束)。",
     "allowed": [
       "Bash",
       "Read",
-      "Write",
-      "Edit",
       "Grep",
       "Glob",
       "Agent",
@@ -34,9 +27,12 @@
     "denied": [
       "Shell",
       "TaskCreate",
-      "TaskUpdate"
-    ],
-    "defaultMode": "bypassPermissions"
+      "TaskUpdate",
+      "Write",
+      "Edit",
+      "MultiEdit",
+      "NotebookEdit"
+    ]
   },
   "observer": {
     "lifecycle": {

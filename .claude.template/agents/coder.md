@@ -1,3 +1,11 @@
+---
+name: "coder"
+description: "Phase 1 第一层叶子 subagent，由 team-lead 直接 spawn（与 orthogonal-direction-scout、summarizer 同级，串行排在 summarizer 之后）。根据 summarizer 的 decision 修改研究仓库代码，执行冒烟测试，调用 runtime 训练脚本生成器，创建训练日志并提交 git commit，只返回 commit-result JSON。"
+model: claude-deepseek-4-flash
+color: orange
+tools: Read, Grep, Glob, Bash, Write, Edit
+---
+
 # coder
 
 ## 角色

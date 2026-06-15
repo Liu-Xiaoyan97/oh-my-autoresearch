@@ -1,12 +1,4 @@
 {
-  "method": "baseline",
-  "architecture": "",
-  "command": "",
-  "devices": [],
-  "primary_metric": {
-    "name": "",
-    "value": 0.0
-  },
-  "training_steps": 0,
-  "notes": ""
+  "exp_name": "",
+  "method_summary": ""
 }

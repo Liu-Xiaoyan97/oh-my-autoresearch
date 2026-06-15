@@ -43,11 +43,12 @@ def test_validate_runtime_and_generate_launch(tmp_path):
     launch_content = launch_file.read_text(encoding="utf-8")
     assert f"PROJECT_ROOT={runtime.parent / 'project' / 'nn-architecture'}" in launch_content
     assert "TRAINING_SCRIPT=train.py" in launch_content
-    assert "TRAINING_ARGS=(--num_training_steps 10000 --eval_n_steps 1000)" in launch_content
+    assert "EXTRA_ARGS=(--num_training_steps 10000 --eval_n_steps 1000)" in launch_content
     assert "TRAINING_DEVICES=(cuda:0 cuda:1)" in launch_content
     assert "export AUTORESEARCH_DEVICES=cuda:0,cuda:1" in launch_content
     assert "export CUDA_VISIBLE_DEVICES=0,1" in launch_content
-    assert 'exec python "$SCRIPT_PATH" "${TRAINING_ARGS[@]}"' in launch_content
+    assert 'FINAL_COMMAND=("$PYTHON" "$SCRIPT_PATH" "${EXTRA_ARGS[@]}")' in launch_content
+    assert 'exec "${FINAL_COMMAND[@]}"' in launch_content
 
 
 def test_training_log_parser_reports_primary_metric(tmp_path):
@@ -111,3 +112,51 @@ def test_observer_dispatch_writes_log_and_dynamic_metric(tmp_path):
 
     assert row == (100, 100, 0.81, 0.81)
     assert (runtime / "observations" / "exp_0.log").read_text(encoding="utf-8") == "[2026-06-15 00:00:00]|[INFO]-ok\n"
+
+
+def test_observer_log_filters_hook_noise(tmp_path):
+    runtime = copy_runtime(tmp_path)
+    dispatch = runtime / "observer" / "scripts" / "dispatch" / "dispatch_event.py"
+
+    for source in ["session-start", "session-stop", "tool-pre-use", "tool-post-use"]:
+        run(
+            "python3",
+            str(dispatch),
+            str(runtime),
+            json.dumps({
+                "event_type": "log",
+                "payload": {
+                    "exp_name": "default",
+                    "timestamp": "2026-06-15T00:00:00+00:00",
+                    "level": "DEBUG",
+                    "source": source,
+                    "message": "noise",
+                },
+            }),
+        )
+
+    assert not (runtime / "observations" / "default.log").exists()
+
+
+def test_observer_log_resolves_default_to_current_exp_name(tmp_path):
+    runtime = copy_runtime(tmp_path)
+    dispatch = runtime / "observer" / "scripts" / "dispatch" / "dispatch_event.py"
+
+    run(
+        "python3",
+        str(dispatch),
+        str(runtime),
+        json.dumps({
+            "event_type": "log",
+            "payload": {
+                "exp_name": "default",
+                "timestamp": "2026-06-15T00:00:00+00:00",
+                "level": "INFO",
+                "source": "team-lead",
+                "message": "checkpoint",
+            },
+        }),
+    )
+
+    assert not (runtime / "observations" / "default.log").exists()
+    assert (runtime / "observations" / "exp_0.log").read_text(encoding="utf-8") == "[2026-06-15 00:00:00]|[INFO]-checkpoint\n"

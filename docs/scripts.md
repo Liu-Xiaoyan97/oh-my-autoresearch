@@ -34,6 +34,7 @@
 | writers | `write_experiments.py` | 写入 experiments 表 |
 | writers | `write_exploration.py` | 写入 exploration 表 |
 | writers | `write_knowledge.py` | 写入 baseline/learned/rejected JSON |
+| writers | `write_state.py` | 写入 `runtime/states/states.json` 检查点 |
 
 ### Runtime Public Scripts
 

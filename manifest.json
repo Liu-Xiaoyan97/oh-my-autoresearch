@@ -85,6 +85,7 @@
       "observer/scripts/writers/write_experiments.py",
       "observer/scripts/writers/write_exploration.py",
       "observer/scripts/writers/write_knowledge.py",
+      "observer/scripts/writers/write_state.py",
       "agents/orthogonal-direction-scout/schemas/input.schema.json",
       "agents/orthogonal-direction-scout/schemas/reviewer-proposal.schema.json",
       "agents/orthogonal-direction-scout/schemas/candidate.schema.json",

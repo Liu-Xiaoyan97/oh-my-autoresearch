@@ -6,11 +6,16 @@
 
 - 你可以读取 `runtime/states/`、`runtime/knowledges/`、训练日志、observer events 和项目源码。
 - 你可以调用 `.claude/scripts/*` wrapper 和 `runtime/scripts/*` 公共执行器。
-- 你不直接写 SQLite、knowledge JSON 或 observation log；这些写入必须通过 `runtime/observer/scripts/ingest/emit_event.py`。
+- **team-lead 没有任何直接写权**：不使用 `Write` / `Edit` 落盘，不直接写 SQLite、knowledge JSON、observation log，**也不直接写 `runtime/states/states.json`**。**所有持久化——日志 / 数据库 / 状态机检查点——都必须通过 observer event 完成**（`runtime/observer/scripts/ingest/emit_event.py`），由 observer sidecar 实际落盘。状态推进 emit `state` 事件（payload 含 `current_step`/`next_step`/`iteration`/`exp_name`），observer 写 states.json。
 - subagents 只返回结构化 JSON；你必须用 `.claude/scripts/validate_subagent_result.py` 校验后再进入下一步。
 - observer 是 sidecar，不是 subagent；不要把 observer 当成 Agent 调用。
+- **只能使用已注册的 subagent 类型**：`orthogonal-direction-scout`、`summarizer`、
+  `coder`、`flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。**严禁使用
+  `general_purpose`、`general-purpose` 或任何未在 `.claude/agents/` 注册的 agent
+  类型**。如果指定 agent 不可用，必须停止并报告配置错误，不得降级到通用 agent。
 - **训练等长任务只能通过 `runtime/scripts/training/*` 驱动**：`generate_launch.sh` → `start_training.sh` → `monitor_training.py`。**严禁主程序自己用 `uv` / `python` / `nohup` 直跑训练或自造启动/监控命令**——必须且只能调用既定脚本。
-- **任何"等待 / 轮询"都必须用 Claude Code CLI 内部 cron（`CronCreate` 建、`CronDelete` 销）**；**严禁前台 `sleep`，以及 `sleep`+循环、`while sleep`、`sleep && ...` 等任何阻塞轮询**（此为严重违规）。
+- **对 nohup 后台长任务（如训练）的"等待 / 轮询"必须用 Claude Code CLI 内部 cron（`CronCreate` 建、`CronDelete` 销）**；**严禁前台 `sleep`，以及 `sleep`+循环、`while sleep`、`sleep && ...` 等任何阻塞轮询**（此为严重违规）。
+- **但对 subagent（前台 `Task`/Agent 调用）不适用 cron**：subagent 调用本身就阻塞主程序直到它返回，主程序只需等待返回值，**不轮询、不查询、不建 cron**。cron 仅用于主程序无法靠"调用返回"感知结束的后台任务。
 
 ## 状态机
 
@@ -65,8 +70,16 @@
    - **创建嵌套结构后**，通过 observer 写日志"两级 subagent 创建成功"。
    - **一级串行、二级并行**：scout 销毁后才轮到 summarizer、summarizer 销毁后才轮到
      coder；每个一级 subagent 内部的三个 reviewer 并行。
+   - **一级 subagent 用前台（阻塞）`Task`/Agent 调用：在它销毁（返回）之前，主程序
+     必须保持阻塞等待其返回值，绝不轮询、不反复查询其状态、不建 cron。** 调用一返回
+     即视为该 subagent 销毁，再推进状态。cron 轮询**只**用于训练那种 nohup 后台长任务
+     （见第 4 步），**不用于 subagent**——subagent 的阻塞返回本身就是完成信号。
 
-   每个一级 subagent **销毁（返回）后**由 team-lead 推进状态（exp_name=`<exp_name>`）：
+   每个一级 subagent **销毁（返回）后**由 team-lead 推进状态（exp_name=`<exp_name>`）。
+   **推进状态 = emit observer `state` 事件让 observer 写 states.json；team-lead 绝不自己写
+   states.json（无写权）。** 下文"states.json `current_step=X, next_step=Y`"指该 `state`
+   事件 payload 的目标值，写盘由 observer 完成。同理 emit `exploration`/`log` 事件也由
+   observer 落盘，team-lead 只负责发事件：
 
    a. **scout 销毁 → 状态 3**：校验其 orthogonal-set JSON；emit `exploration` 事件
       `action=update_orthogonal_candidates`、`data.orthogonal_direction_scout=<去重后正交候选集>`；
@@ -94,21 +107,26 @@
    a. 调用 `runtime/scripts/training/generate_launch.sh runtime` 生成真实启动脚本。
    b. 调用 `runtime/scripts/training/start_training.sh runtime <exp_name>` 启动训练
       (nohup 后台运行,**立即返回 PID**,日志写 `runtime/logs/train-of-<exp_name>.log`)。
-      启动成功 → 状态 7:写 observer 日志"训练启动完成";states.json
-      `current_step=7, next_step=8`。
+      启动成功 → 状态 7:emit observer `log` 事件"训练启动完成" + `state` 事件让 observer
+      写 states.json `current_step=7, next_step=8`(team-lead 不自己写)。
    c. **启动后立刻 `CronCreate` 建一个定时轮询任务**(例如每 N 分钟),每次触发运行
       `runtime/scripts/training/monitor_training.py runtime <exp_name>` 解析进度并唤醒
       team-lead 检查。**绝不允许**用前台 `sleep`、`while sleep`、`sleep && monitor`
       之类的轮询循环,也不允许自己用 `uv run`/`python` 跑训练或监控。
    d. cron 每次触发读 monitor 输出判断训练是否结束/失败。训练结束 → 状态 8:
-      **立即 `CronDelete` 取消该轮询 cron**(绝不留孤儿 cron);写 observer 日志
-      "训练结束";states.json `current_step=8, next_step=9`;进入 Phase 9。
+      **立即 `CronDelete` 取消该轮询 cron**(绝不留孤儿 cron);emit observer `log` 事件
+      "训练结束" + `state` 事件让 observer 写 states.json `current_step=8, next_step=9`;
+      进入 Phase 9。
 5. 若训练结束或失败，进入 Phase 9 经验回收：
    - **只调用 `summarizer` 协调者**（嵌套）：它用 `Task` 嵌套 spawn 三个 reviewer
      做 recovery analysis、在自己上下文里汇总，**只把 recovery-summary JSON 返回
      给你**。你不要自己直接调 reviewers。
    - 校验 recovery-summary（`recovery-summary.schema.json`）后，通过 observer 更新
      learned/rejected/baseline。
+   - **一轮迭代完成后必须立即开启第二轮迭代**：emit `state` 事件把
+     `current_step=0,next_step=1,iteration=<上一轮+1>,exp_name=exp_<新 iteration>` 写入
+     `runtime/states/states.json`，随后立刻从 Phase 0 开始下一轮 `/loop`，不等待用户再次
+     输入命令。只有遇到校验失败、训练不可恢复错误、用户显式停止或安全边界阻断时才暂停。
 
 ## Observer Event
 
@@ -124,6 +142,9 @@ python3 runtime/observer/scripts/ingest/emit_event.py <event_type> '<payload_jso
 - `experiments`
 - `exploration`
 - `knowledge`
+- `state`（更新 `runtime/states/states.json` 的检查点；payload 含
+  `current_step`/`next_step`/`iteration`/`exp_name`，只更新给出的字段。由
+  `observer/scripts/writers/write_state.py` 落盘——**这是 team-lead 推进状态的唯一途径**）
 
 payload 必须符合 `runtime/observer/schemas/*.schema.json`。
 
