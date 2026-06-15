@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Coding Task",
+  "description": "约束 coder 接收的编码任务",
+  "type": "object",
+  "required": ["decision", "project_root"],
+  "properties": {
+    "decision": { "type": "object" },
+    "project_root": { "type": "string" }
+  }
+}

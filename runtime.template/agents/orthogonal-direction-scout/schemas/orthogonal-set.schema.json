@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Orthogonal Set",
+  "description": "约束去重后的正交候选集",
+  "type": "object",
+  "required": ["candidates", "deduplication_reason"],
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/candidate" }
+    },
+    "deduplication_reason": { "type": "string" },
+    "orthogonal_set": {
+      "type": "array",
+      "items": { "type": "integer" }
+    }
+  },
+  "definitions": {
+    "candidate": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    }
+  }
+}

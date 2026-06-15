@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase 1 Exploration Result",
+  "description": "Phase 1 方向探索阶段的结构化结果",
+  "type": "object",
+  "required": ["loaded_knowledge_summary", "orthogonal_candidates", "votes", "decision", "commit_result"],
+  "properties": {
+    "loaded_knowledge_summary": {
+      "type": "object",
+      "properties": {
+        "baseline_methods": { "type": "integer" },
+        "learned_methods": { "type": "integer" },
+        "rejected_methods": { "type": "integer" }
+      }
+    },
+    "orthogonal_candidates": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "votes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "agent": { "type": "string" },
+          "candidate_index": { "type": "integer" },
+          "score": { "type": "number" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "properties": {
+        "selected_candidate": { "type": "integer" },
+        "total_votes": { "type": "integer" },
+        "reason": { "type": "string" }
+      }
+    },
+    "commit_result": {
+      "type": "object",
+      "properties": {
+        "commit_id": { "type": "string" },
+        "files_changed": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vote Input",
+  "description": "约束 summarizer 给 reviewer 的投票输入",
+  "type": "object",
+  "required": ["candidates", "objective"],
+  "properties": {
+    "candidates": { "type": "array", "items": { "type": "object" } },
+    "objective": { "type": "object" }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase 0 Validation Result",
+  "description": "Phase 0 初始校验结果",
+  "type": "object",
+  "required": ["states_valid", "objective_valid", "baseline_complete", "remote_ok", "git_clean", "pass"],
+  "properties": {
+    "states_valid": {
+      "type": "boolean",
+      "description": "states.json 校验结果"
+    },
+    "objective_valid": {
+      "type": "boolean",
+      "description": "objective.json 校验结果"
+    },
+    "baseline_complete": {
+      "type": "boolean",
+      "description": "baseline 完整性"
+    },
+    "remote_ok": {
+      "type": "boolean",
+      "description": "remote/ssh 校验结果"
+    },
+    "git_clean": {
+      "type": "boolean",
+      "description": "git clean 检查结果"
+    },
+    "pass": {
+      "type": "boolean",
+      "description": "整体是否通过"
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "错误信息列表"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Subagent Result",
+  "description": "team-lead 接收 subagent 返回值的通用外壳",
+  "type": "object",
+  "required": ["agent_name", "phase", "status", "payload"],
+  "properties": {
+    "agent_name": {
+      "type": "string",
+      "description": "subagent 名称"
+    },
+    "phase": {
+      "type": "integer",
+      "description": "所属阶段"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "failure", "partial"],
+      "description": "执行状态"
+    },
+    "payload_schema": {
+      "type": "string",
+      "description": "payload 对应的 schema 名称"
+    },
+    "payload": {
+      "type": "object",
+      "description": "结构化结果"
+    },
+    "error": {
+      "type": ["string", "null"],
+      "description": "错误信息"
+    }
+  }
+}

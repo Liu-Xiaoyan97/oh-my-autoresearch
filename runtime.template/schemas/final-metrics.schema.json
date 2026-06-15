@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Final Metrics Schema",
+  "description": "约束训练完成后的最终指标结果",
+  "type": "object",
+  "required": ["exp_name", "final_loss", "final_metric", "total_steps"],
+  "properties": {
+    "exp_name": { "type": "string" },
+    "final_loss": { "type": "number" },
+    "final_metric": { "type": "number" },
+    "total_steps": { "type": "integer" },
+    "best_metric": { "type": "number" },
+    "best_step": { "type": "integer" },
+    "duration_seconds": { "type": "number" }
+  }
+}

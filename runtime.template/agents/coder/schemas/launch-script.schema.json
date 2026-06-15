@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Launch Script Result",
+  "description": "约束训练脚本生成结果",
+  "type": "object",
+  "required": ["path", "generated"],
+  "properties": {
+    "path": { "type": "string" },
+    "generated": { "type": "boolean" },
+    "command": { "type": "string" }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "runtime_root": "runtime",
+  "events_path": "observer/events/events.jsonl",
+  "offsets_path": "observer/offsets/events.offset",
+  "run_path": "observer/run",
+  "schemas_path": "observer/schemas",
+  "observations_path": "observations",
+  "db_path": "db/runtime.sqlite",
+  "knowledges_path": "knowledges",
+  "poll_interval": 5,
+  "deadletter_path": "observer/events/deadletter.jsonl"
+}

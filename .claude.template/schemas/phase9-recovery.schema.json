@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase 9 Recovery Result",
+  "description": "Phase 9 经验回收阶段结构化结果",
+  "type": "object",
+  "required": ["exp_name", "final_metrics", "baseline_comparison", "recovery_analyses", "recovery_summary", "target_knowledge_file"],
+  "properties": {
+    "exp_name": {
+      "type": "string",
+      "description": "实验名称"
+    },
+    "final_metrics": {
+      "type": "object",
+      "description": "最终训练指标"
+    },
+    "baseline_comparison": {
+      "type": "object",
+      "properties": {
+        "better_than_baseline": { "type": "boolean" },
+        "metric_difference": { "type": "number" }
+      }
+    },
+    "recovery_analyses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "agent": { "type": "string" },
+          "analysis": { "type": "string" }
+        }
+      }
+    },
+    "recovery_summary": {
+      "type": "object",
+      "properties": {
+        "category": { "type": "string", "enum": ["learned", "rejected", "baseline_update"] },
+        "reason": { "type": "string" }
+      }
+    },
+    "target_knowledge_file": {
+      "type": "string",
+      "enum": ["baseline.json", "learned.json", "rejected.json"],
+      "description": "目标知识文件"
+    }
+  }
+}

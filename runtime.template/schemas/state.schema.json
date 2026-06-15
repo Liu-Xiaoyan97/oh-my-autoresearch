@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "State Schema",
+  "description": "约束 runtime/states/states.json",
+  "type": "object",
+  "required": ["current_step", "next_step", "iteration", "exp_name"],
+  "properties": {
+    "current_step": { "type": "integer", "minimum": 0 },
+    "next_step": { "type": "integer", "minimum": 1 },
+    "iteration": { "type": "integer", "minimum": 0 },
+    "exp_name": { "type": "string" }
+  }
+}

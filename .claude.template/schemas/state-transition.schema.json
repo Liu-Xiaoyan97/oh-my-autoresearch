@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "State Transition Event",
+  "description": "定义状态迁移事件",
+  "type": "object",
+  "required": ["exp_name", "previous_current_step", "previous_next_step", "new_current_step", "new_next_step", "checkpoint", "reason"],
+  "properties": {
+    "exp_name": {
+      "type": "string",
+      "description": "实验名称"
+    },
+    "previous_current_step": {
+      "type": "integer",
+      "description": "之前的 current_step"
+    },
+    "previous_next_step": {
+      "type": "integer",
+      "description": "之前的 next_step"
+    },
+    "new_current_step": {
+      "type": "integer",
+      "description": "新的 current_step"
+    },
+    "new_next_step": {
+      "type": "integer",
+      "description": "新的 next_step"
+    },
+    "checkpoint": {
+      "type": "integer",
+      "description": "checkpoint 编号 (1-9)"
+    },
+    "reason": {
+      "type": "string",
+      "description": "迁移原因"
+    }
+  }
+}

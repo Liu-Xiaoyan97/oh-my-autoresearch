@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Log Event Schema",
+  "description": "约束写入 observations log 的事件 payload",
+  "type": "object",
+  "required": ["exp_name", "timestamp", "level", "source", "message"],
+  "properties": {
+    "exp_name": { "type": "string" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "level": { "type": "string", "enum": ["DEBUG", "INFO", "WARN", "ERROR"] },
+    "source": { "type": "string" },
+    "message": { "type": "string" }
+  }
+}

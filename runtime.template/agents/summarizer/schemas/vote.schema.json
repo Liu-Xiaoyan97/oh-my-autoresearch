@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vote",
+  "description": "约束 reviewer 的评分输出",
+  "type": "object",
+  "required": ["agent", "candidate_index", "score", "reason"],
+  "properties": {
+    "agent": { "type": "string" },
+    "candidate_index": { "type": "integer" },
+    "score": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "reason": { "type": "string" }
+  }
+}

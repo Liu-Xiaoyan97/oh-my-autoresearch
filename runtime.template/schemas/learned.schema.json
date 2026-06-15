@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Learned Schema",
+  "description": "约束 runtime/knowledges/learned.json",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["method", "category", "reason", "metric"],
+    "properties": {
+      "method": { "type": "string" },
+      "category": { "type": "string" },
+      "reason": { "type": "string" },
+      "metric": { "type": "number" },
+      "timestamp": { "type": "string", "format": "date-time" }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "goal": "优化模型在特定数据集上的 accuracy",
+  "primary_metrics": {
+    "name": "accuracy",
+    "mode": "maximization"
+  },
+  "project_root": ".",
+  "command": "python train.py --config config.yaml",
+  "remote": false,
+  "hosts": [],
+  "num_training_steps": 10000,
+  "eval_n_steps": 1000,
+  "devices": ["cuda:0", "cuda:1"]
+}

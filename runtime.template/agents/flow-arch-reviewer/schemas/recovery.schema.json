@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Flow Arch Reviewer Recovery",
+  "description": "约束架构 reviewer 的经验回收分析",
+  "type": "object",
+  "required": ["analysis", "category"],
+  "properties": {
+    "analysis": { "type": "string" },
+    "category": { "type": "string", "enum": ["learned", "rejected", "neutral"] }
+  }
+}

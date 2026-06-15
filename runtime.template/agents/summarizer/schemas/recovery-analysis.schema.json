@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Recovery Analysis",
+  "description": "约束 Phase 9 中 reviewer 的经验/教训分析",
+  "type": "object",
+  "required": ["agent", "analysis"],
+  "properties": {
+    "agent": { "type": "string" },
+    "analysis": { "type": "string" },
+    "category": { "type": "string", "enum": ["learned", "rejected", "neutral"] }
+  }
+}

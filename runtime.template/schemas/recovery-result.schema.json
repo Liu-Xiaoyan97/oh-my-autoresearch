@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Recovery Result Schema",
+  "description": "约束经验回收判断结果",
+  "type": "object",
+  "required": ["exp_name", "category", "reason"],
+  "properties": {
+    "exp_name": { "type": "string" },
+    "category": { "type": "string", "enum": ["learned", "rejected", "baseline_update"] },
+    "reason": { "type": "string" },
+    "comparison": {
+      "type": "object",
+      "properties": {
+        "better_than_baseline": { "type": "boolean" },
+        "metric_difference": { "type": "number" }
+      }
+    }
+  }
+}

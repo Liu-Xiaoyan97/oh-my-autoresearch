@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Recovery Summary",
+  "description": "约束 Phase 9 summarizer 汇总结果",
+  "type": "object",
+  "required": ["category", "reason"],
+  "properties": {
+    "category": { "type": "string", "enum": ["learned", "rejected", "baseline_update"] },
+    "reason": { "type": "string" },
+    "analyses": { "type": "array", "items": { "type": "object" } }
+  }
+}

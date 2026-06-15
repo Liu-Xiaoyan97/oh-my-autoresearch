@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Experiment Row Schema",
+  "description": "约束 experiments 表单行数据结构",
+  "type": "object",
+  "required": ["exp_name"],
+  "properties": {
+    "exp_name": { "type": "string" },
+    "train_step": { "type": "integer" },
+    "train_loss": { "type": "number" },
+    "val_step": { "type": "integer" },
+    "val_metric": { "type": "number" },
+    "status": { "type": "string", "enum": ["running", "completed", "failed", "killed"] },
+    "pid": { "type": ["integer", "null"] },
+    "created_at": { "type": "string" },
+    "updated_at": { "type": "string" }
+  }
+}

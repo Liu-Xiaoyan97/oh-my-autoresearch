@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Smoke Test Result",
+  "description": "约束冒烟测试结果",
+  "type": "object",
+  "required": ["passed", "tests_run", "tests_failed"],
+  "properties": {
+    "passed": { "type": "boolean" },
+    "tests_run": { "type": "integer" },
+    "tests_failed": { "type": "integer" },
+    "errors": { "type": "array", "items": { "type": "string" } }
+  }
+}

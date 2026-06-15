@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Knowledge Write Schema",
+  "description": "约束写入 knowledge JSON 的事件 payload",
+  "type": "object",
+  "required": ["action", "target_file"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["update_baseline", "append_learned", "append_rejected"]
+    },
+    "target_file": {
+      "type": "string",
+      "enum": ["baseline.json", "learned.json", "rejected.json"]
+    },
+    "data": { "type": "object" }
+  }
+}

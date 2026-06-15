@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Candidate",
+  "description": "约束单个优化候选",
+  "type": "object",
+  "required": ["name", "description"],
+  "properties": {
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "rationale": { "type": "string" },
+    "changes": { "type": "array", "items": { "type": "string" } }
+  }
+}

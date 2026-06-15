@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase 3 Training Result",
+  "description": "Phase 3 训练阶段结构化状态",
+  "type": "object",
+  "required": ["exp_name", "launch_script", "pid", "status", "complete"],
+  "properties": {
+    "exp_name": {
+      "type": "string",
+      "description": "实验名称"
+    },
+    "launch_script": {
+      "type": "string",
+      "description": "launch script 路径"
+    },
+    "pid": {
+      "type": "integer",
+      "description": "训练进程 PID"
+    },
+    "latest_train_step": {
+      "type": "integer",
+      "description": "最新训练步数"
+    },
+    "latest_train_loss": {
+      "type": "number",
+      "description": "最新训练 loss"
+    },
+    "latest_val_step": {
+      "type": "integer",
+      "description": "最新验证步数"
+    },
+    "latest_primary_metric": {
+      "type": "number",
+      "description": "最新主指标"
+    },
+    "failure_reason": {
+      "type": ["string", "null"],
+      "description": "失败原因"
+    },
+    "complete": {
+      "type": "boolean",
+      "description": "训练是否完成"
+    }
+  }
+}

@@ -1,3 +1,27 @@
-__pycache__/
-*.pyc
+# Runtime generated files
 .DS_Store
+runtime/db/*.sqlite
+runtime/logs/*.log
+runtime/observations/*.log
+runtime/observer/events/*.jsonl
+runtime/observer/events/deadletter.jsonl
+runtime/observer/offsets/*.offset
+runtime/observer/run/*.pid
+runtime/launchscripts/launch_*.sh
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local settings
+settings.local.json

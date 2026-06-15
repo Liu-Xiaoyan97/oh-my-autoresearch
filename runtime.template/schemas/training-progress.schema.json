@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Training Progress Schema",
+  "description": "约束训练监控解析结果",
+  "type": "object",
+  "required": ["train_step", "train_loss", "val_step", "val_metric"],
+  "properties": {
+    "train_step": { "type": "integer" },
+    "train_loss": { "type": "number" },
+    "val_step": { "type": "integer" },
+    "val_metric": { "type": "number" }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Commit Result",
+  "description": "约束 git commit 结果",
+  "type": "object",
+  "required": ["commit_id", "files_changed"],
+  "properties": {
+    "commit_id": { "type": "string" },
+    "files_changed": { "type": "array", "items": { "type": "string" } },
+    "smoke_test_passed": { "type": "boolean" }
+  }
+}

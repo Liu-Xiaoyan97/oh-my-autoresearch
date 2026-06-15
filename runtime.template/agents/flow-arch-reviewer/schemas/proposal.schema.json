@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Flow Arch Reviewer Proposal",
+  "description": "约束架构 reviewer 的候选提案",
+  "type": "object",
+  "required": ["description", "rationale"],
+  "properties": {
+    "description": { "type": "string" },
+    "rationale": { "type": "string" }
+  }
+}

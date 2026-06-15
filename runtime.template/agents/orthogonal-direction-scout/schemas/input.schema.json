@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Direction Scout Input",
+  "description": "约束 direction scout 输入上下文",
+  "type": "object",
+  "required": ["baseline", "learned", "rejected", "objective"],
+  "properties": {
+    "baseline": { "type": "object" },
+    "learned": { "type": "array", "items": { "type": "object" } },
+    "rejected": { "type": "array", "items": { "type": "object" } },
+    "objective": { "type": "object" }
+  }
+}

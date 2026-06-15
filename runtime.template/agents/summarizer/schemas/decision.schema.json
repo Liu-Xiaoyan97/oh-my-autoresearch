@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Decision",
+  "description": "约束最终票选方法",
+  "type": "object",
+  "required": ["selected_candidate", "total_votes"],
+  "properties": {
+    "selected_candidate": { "type": "integer" },
+    "total_votes": { "type": "integer" },
+    "reason": { "type": "string" }
+  }
+}
