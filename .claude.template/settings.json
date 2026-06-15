@@ -36,7 +36,8 @@
       "Edit",
       "MultiEdit",
       "NotebookEdit"
-    ]
+    ],
+    "defaultMode": "bypassPermissions"
   },
   "observer": {
     "lifecycle": {
