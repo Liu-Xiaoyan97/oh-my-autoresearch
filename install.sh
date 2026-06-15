@@ -57,13 +57,23 @@ echo ""
 echo "→ 安装 runtime.template 到 $RUNTIME_TARGET ..."
 copy_tree_no_clobber "$SCRIPT_DIR/runtime.template" "$RUNTIME_TARGET"
 
-# 3. 设置脚本执行权限
+# 3. 复制 pyproject.toml → 宿主根 (no-clobber，不覆盖宿主已有的)
+echo ""
+echo "→ 安装 pyproject.toml 到 $HOST_ROOT ..."
+if [[ -e "$HOST_ROOT/pyproject.toml" ]]; then
+    echo "  跳过 (已存在): pyproject.toml"
+else
+    cp "$SCRIPT_DIR/pyproject.toml" "$HOST_ROOT/pyproject.toml"
+    echo "  安装: pyproject.toml"
+fi
+
+# 4. 设置脚本执行权限
 echo ""
 echo "→ 设置脚本执行权限 ..."
 find "$SCRIPT_DIR" -name "*.sh" -exec chmod +x {} +
 find "$RUNTIME_TARGET" -name "*.sh" -exec chmod +x {} +
 
-# 4. 调用 bootstrap.sh
+# 5. 调用 bootstrap.sh
 echo ""
 echo "→ 运行 bootstrap.sh ..."
 "$SCRIPT_DIR/bootstrap.sh" "$HOST_ROOT"

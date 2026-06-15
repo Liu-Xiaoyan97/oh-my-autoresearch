@@ -39,19 +39,24 @@
    - 调用 `runtime/scripts/validate/validate_runtime.py runtime`。
    - 调用 `runtime/scripts/git/check_clean.sh <project_root>`。
    - 通过 observer 写入启动校验、校验通过或错误日志。
-3. 若进入 Phase 1，串行调用：
-   - `orthogonal-direction-scout`
-   - `summarizer`
-   - `coder`
-   其中 reviewer 类 subagents 可并行作为二级分析者参与。
+3. 若进入 Phase 1（方向探索），**只调用 `summarizer` 一个协调者 subagent**（嵌套）：
+   - `summarizer` 会用 `Task` 嵌套 spawn `orthogonal-direction-scout` 与三个
+     reviewer（`math-theorist`、`numerical-debugger`、`flow-arch-reviewer`），在它
+     自己的上下文里汇总，**只把最终 decision JSON 返回给你**。
+   - 你**绝不要**自己直接调 scout / reviewers——它们是 summarizer 的嵌套子
+     subagent，其原始输出**不进入你的上下文**（这是"不污染主程序"的关键）。
+   - 校验 summarizer 返回的 decision JSON（`decision.schema.json`）后再进入下一步。
+   - 随后进入 Phase 2（代码修改）时再调用 `coder`。
 4. 若进入训练阶段：
    - 调用 `runtime/scripts/training/generate_launch.sh runtime`。
    - 调用 `runtime/scripts/training/start_training.sh runtime <exp_name>`。
    - 用 `runtime/scripts/training/monitor_training.py runtime <exp_name>` 解析进度。
 5. 若训练结束或失败，进入 Phase 9 经验回收：
-   - 调用 reviewer 类 subagents。
-   - 调用 `summarizer` 产出 recovery summary。
-   - 通过 observer 更新 learned/rejected/baseline。
+   - **只调用 `summarizer` 协调者**（嵌套）：它用 `Task` 嵌套 spawn 三个 reviewer
+     做 recovery analysis、在自己上下文里汇总，**只把 recovery-summary JSON 返回
+     给你**。你不要自己直接调 reviewers。
+   - 校验 recovery-summary（`recovery-summary.schema.json`）后，通过 observer 更新
+     learned/rejected/baseline。
 
 ## Observer Event
 
@@ -70,14 +75,26 @@ python3 runtime/observer/scripts/ingest/emit_event.py <event_type> '<payload_jso
 
 payload 必须符合 `runtime/observer/schemas/*.schema.json`。
 
-## Subagent 返回
+## Subagent 返回（嵌套结构）
 
-每个 subagent 必须返回 JSON，并匹配对应 runtime schema：
+调用层级：
 
-- `orthogonal-direction-scout`: `orthogonal-set.schema.json`
+- **主程序（team-lead）只直接调用第一层 subagent**：Phase 1/9 调 `summarizer`，
+  Phase 2 调 `coder`。
+- **`summarizer` 是协调者**，它用 `Task` 嵌套 spawn 第二层 subagent
+  （`orthogonal-direction-scout` + 三个 reviewer），消化它们的 JSON，**只向主程序
+  返回一份汇总 JSON**。scout/reviewer 的输出是 summarizer 的内部输入，**不回主程序**。
+
+主程序需要校验的 JSON（第一层返回）：
+
 - `summarizer` Phase 1: `decision.schema.json`
 - `summarizer` Phase 9: `recovery-summary.schema.json`
 - `coder`: `commit-result.schema.json` 或阶段内指定 schema
+
+summarizer 内部校验的 JSON（第二层，不回主程序）：
+
+- `orthogonal-direction-scout`: `orthogonal-set.schema.json`
 - reviewer proposal/vote/recovery: 对应 agent schema
 
-如果校验失败，停止推进当前阶段，记录 observer log，并向用户说明需要修正的结构化输出。
+如果第一层校验失败，停止推进当前阶段，记录 observer log，并向用户说明需要修正的
+结构化输出。

@@ -1,11 +1,17 @@
 {
   "hooks": {
-    "onSessionStart": ".claude/hooks/session-start.sh",
-    "onSessionStop": ".claude/hooks/stop.sh",
-    "onToolUse": {
-      "pre": ".claude/hooks/pre-tool-use.sh",
-      "post": ".claude/hooks/post-tool-use.sh"
-    }
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh" } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop.sh" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-tool-use.sh" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "", "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-tool-use.sh" } ] }
+    ]
   },
   "permissions": {
     "policy": "strict",

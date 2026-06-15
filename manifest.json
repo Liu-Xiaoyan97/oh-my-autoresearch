@@ -141,7 +141,8 @@
   },
   "install_targets": {
     "claude_target": ".claude/",
-    "runtime_target": "runtime/"
+    "runtime_target": "runtime/",
+    "pyproject_target": "pyproject.toml"
   },
   "supported_commands": [
     "/loop",
