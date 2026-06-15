@@ -14,13 +14,12 @@ OBS_DIR="$RUNTIME/observations"
 EVENTS_DIR="$RUNTIME/observer/events"
 OFFSET_DIR="$RUNTIME/observer/offsets"
 RUN_DIR="$RUNTIME/observer/run"
-LAUNCH_DIR="$RUNTIME/launchscripts"
 
 echo "=== Bootstrap 初始化 ==="
 
 # 1. 创建缺失的 runtime 目录
 echo "→ 创建缺失的 runtime 目录 ..."
-for dir in "$DB_DIR" "$LOGS_DIR" "$OBS_DIR" "$EVENTS_DIR" "$OFFSET_DIR" "$RUN_DIR" "$LAUNCH_DIR"; do
+for dir in "$DB_DIR" "$LOGS_DIR" "$OBS_DIR" "$EVENTS_DIR" "$OFFSET_DIR" "$RUN_DIR"; do
     if [[ ! -d "$dir" ]]; then
         mkdir -p "$dir"
         echo "  创建: $dir"

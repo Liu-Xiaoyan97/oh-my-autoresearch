@@ -7,7 +7,6 @@ runtime/observer/events/*.jsonl
 runtime/observer/events/deadletter.jsonl
 runtime/observer/offsets/*.offset
 runtime/observer/run/*.pid
-runtime/launchscripts/launch_*.sh
 
 # Python
 .venv/
