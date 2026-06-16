@@ -147,7 +147,8 @@
       **立即 `CronDelete` 取消该轮询 cron**(绝不留孤儿 cron);emit observer `log` 事件
       "训练结束" + `state` 事件让 observer 写 states.json `current_step=8, next_step=9`;
       并 emit `experiments` 事件 `action=mark_complete`、`exp_name=<exp_name>`(status=completed);
-      进入 Phase 9。
+      进入 Phase 9;
+    e. cron 创建后非用户强制要求，不得手动查询训练状态。
 4'. **远程训练分支（`objective.remote=true`）**。硬规约同上：① 只能通过既生成的
    `launchscripts/{train_on_remote,query_from_remote}.sh` 驱动远程训练，**严禁主程序自己 ssh
    直跑 python/nohup 或自造启动/监控命令**；② 启动后必须用 `CronCreate` 轮询，**严禁前台
