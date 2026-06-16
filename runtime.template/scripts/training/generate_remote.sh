@@ -131,7 +131,7 @@ EOF
 cat >> "$COPY" <<'EOF'
 echo "→ 上传 $PROJECT_ROOT/ → $FIRST_DEST:~/$REMOTE_DIR/ (rsync --delete 覆盖)" >&2
 ssh -o BatchMode=yes "$FIRST_DEST" "mkdir -p $REMOTE_DIR"
-rsync -az --delete -e "ssh -o BatchMode=yes" "$PROJECT_ROOT/" "$FIRST_DEST:$REMOTE_DIR/"
+rsync -a --whole-file --inplace --delete --exclude='__pycache__/' --exclude='output/' -e "ssh -T -o Compression=no -o BatchMode=yes" "$PROJECT_ROOT/" "$FIRST_DEST:$REMOTE_DIR/"
 echo "✓ copy_to_remote 完成: $FIRST_DEST:~/$REMOTE_DIR" >&2
 EOF
 
