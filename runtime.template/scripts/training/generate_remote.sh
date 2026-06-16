@@ -10,6 +10,7 @@ set -euo pipefail
 #   query_from_remote.sh [exp] 登录第一个 host，取回训练日志到本地并用 monitor_training.py 解析为 training-progress JSON
 #
 # hosts 共享文件系统：上传到第一个 host 即对最后一个 host 可见；日志由最后一个 host 写、第一个 host 读。
+# 远端解释器优先级：project 自身 uv 环境(uv run，需 pyproject.toml) > .venv/bin/python > python3。
 # hosts 每项可为字符串(SSH 别名，如 "mgt")或对象({"host","user","port","keyPath"})；
 # 端口/密钥建议写进 ~/.ssh/config，本生成器只处理 别名 / user@host。
 #
@@ -150,7 +151,7 @@ EOF
 cat >> "$TRAIN" <<'EOF'
 EXP_NAME="${1:-$DEFAULT_EXP}"
 LOG="train-of-${EXP_NAME}.log"
-REMOTE_CMD="cd \"\$HOME/$REMOTE_DIR\" && ${ENV_PREFIX}if [ -x .venv/bin/python ]; then PYEXE=.venv/bin/python; else PYEXE=\$(command -v python3); fi && nohup \"\$PYEXE\" $COMMAND $EXTRA_ARGS > \"$LOG\" 2>&1 < /dev/null & echo \$!"
+REMOTE_CMD="cd \"\$HOME/$REMOTE_DIR\" && ${ENV_PREFIX}if command -v uv >/dev/null 2>&1 && [ -f pyproject.toml ]; then RUN=\"uv run python\"; elif [ -x .venv/bin/python ]; then RUN=.venv/bin/python; else RUN=\$(command -v python3); fi && nohup \$RUN $COMMAND $EXTRA_ARGS > \"$LOG\" 2>&1 < /dev/null & echo \$!"
 echo "→ 链式登录 $LAST_DEST ${JUMP_OPT:+($JUMP_OPT)} 启动训练 exp=$EXP_NAME" >&2
 PID=$(ssh -o BatchMode=yes $JUMP_OPT "$LAST_DEST" "$REMOTE_CMD")
 echo "$PID"
