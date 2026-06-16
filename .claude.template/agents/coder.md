@@ -40,6 +40,7 @@ tools: Read, Grep, Glob, Bash, Write, Edit
   启动 Python/脚本入口，使它能接受 `--num_training_steps` 和 `--eval_n_steps`，并兼容
   `generate_launch.sh` 生成的 launcher。
 - 如果必要改动超出上述范围，必须返回失败 JSON，说明越界原因，不能自行扩大权限。
+- 冒烟测试不得产生任何文件（包括日志），也不得修改任何文件。你只能在内存中执行测试，确认改动能跑通。
 
 ## 远程模式（objective.remote=true）
 
