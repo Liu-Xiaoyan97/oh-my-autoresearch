@@ -47,7 +47,7 @@ tools: Read, Grep, Glob, Bash, Write, Edit
   而是调用既已生成的 `<project_root>/launchscripts/copy_to_remote.sh`（由 team-lead 在首轮
   迭代前用 `generate_remote.sh` 生成）把本地代码覆盖到远端。
 - 你只能**调用**该脚本（Bash 执行），**不得编辑/创建/删除** `launchscripts/` 下任何文件。
-
+- 你不需要也不能直接执行远程命令。你只需要确保本地代码修改正确，并调用 `copy_to_remote.sh` 上传覆盖即可。
 ## 输入
 
 - summarizer 的 decision（票选最高方法描述）
