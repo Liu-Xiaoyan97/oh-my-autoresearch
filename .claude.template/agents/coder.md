@@ -21,7 +21,9 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 3. 调用 `runtime/scripts/training/generate_launch.sh` 生成**真实的训练启动脚本**。
 4. 创建训练日志文件 `runtime/logs/train-of-<exp_name>.log`。
 5. **落盘代码变更**（按 `objective.remote` 二选一）：
-   - `remote=false`（本地）：用 `git add` + `git commit` 提交本次变更，commit_id 取最近一次提交。
+   - `remote=false`（本地）：调用 `runtime/scripts/coding/commit_changes.sh <project_root> <message>`
+     在 **project_root 自身的 git 仓库**提交（脚本会 `cd project_root`，无 `.git` 时先 `git init`）；
+     **绝不**把变更提交到宿主 research-runtime 整仓。commit_id 取该脚本回显的 `rev-parse HEAD`。
    - `remote=true`（远程）：**不走 git**，改为执行 `<project_root>/launchscripts/copy_to_remote.sh`，
      把本地 `project_root` 覆盖上传到远端第一个 host（共享文件系统）。commit_id 记为
      `remote-sync:<first_host>`（如 `remote-sync:mgt`）。
