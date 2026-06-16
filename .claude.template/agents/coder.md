@@ -20,8 +20,12 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 2. 在本地执行**冒烟测试**，确认改动可跑通。
 3. 调用 `runtime/scripts/training/generate_launch.sh` 生成**真实的训练启动脚本**。
 4. 创建训练日志文件 `runtime/logs/train-of-<exp_name>.log`。
-5. 用 `git add` + `git commit` 提交本次代码变更。
-6. 返回 commit result JSON（含最近一次提交的 commit id）。
+5. **落盘代码变更**（按 `objective.remote` 二选一）：
+   - `remote=false`（本地）：用 `git add` + `git commit` 提交本次变更，commit_id 取最近一次提交。
+   - `remote=true`（远程）：**不走 git**，改为执行 `<project_root>/launchscripts/copy_to_remote.sh`，
+     把本地 `project_root` 覆盖上传到远端第一个 host（共享文件系统）。commit_id 记为
+     `remote-sync:<first_host>`（如 `remote-sync:mgt`）。
+6. 返回 commit result JSON（`commit_id` + `files_changed` + `smoke_test_passed`）。
 
 ## 编辑范围硬约束
 
@@ -33,6 +37,14 @@ tools: Read, Grep, Glob, Bash, Write, Edit
   启动 Python/脚本入口，使它能接受 `--num_training_steps` 和 `--eval_n_steps`，并兼容
   `generate_launch.sh` 生成的 launcher。
 - 如果必要改动超出上述范围，必须返回失败 JSON，说明越界原因，不能自行扩大权限。
+
+## 远程模式（objective.remote=true）
+
+- 当 `runtime/states/objective.json` 的 `remote` 为 true 时，代码变更**不提交 git**，
+  而是调用既已生成的 `<project_root>/launchscripts/copy_to_remote.sh`（由 team-lead 在首轮
+  迭代前用 `generate_remote.sh` 生成）把本地代码覆盖到远端。
+- 你只能**调用**该脚本（Bash 执行），**不得编辑/创建/删除** `launchscripts/` 下任何文件。
+- 远程模式下 `commit_id` 用 sentinel `remote-sync:<first_host>` 填充以满足 commit-result schema。
 
 ## 输入
 

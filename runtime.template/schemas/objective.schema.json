@@ -3,23 +3,66 @@
   "title": "Objective Schema",
   "description": "约束 runtime/states/objective.json",
   "type": "object",
-  "required": ["goal", "primary_metrics", "command", "devices"],
+  "required": [
+    "goal",
+    "primary_metrics",
+    "command",
+    "devices"
+  ],
   "properties": {
-    "goal": { "type": "string" },
+    "goal": {
+      "type": "string"
+    },
     "primary_metrics": {
       "type": "object",
-      "required": ["name", "mode"],
+      "required": [
+        "name",
+        "mode"
+      ],
       "properties": {
-        "name": { "type": "string" },
-        "mode": { "type": "string", "enum": ["minimization", "maximization", "minimize", "maximize"] }
+        "name": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "minimization",
+            "maximization",
+            "minimize",
+            "maximize"
+          ]
+        }
       }
     },
-    "project_root": { "type": "string" },
-    "command": { "type": "string" },
-    "remote": { "type": "boolean" },
-    "hosts": { "type": "array", "items": { "type": "object" } },
-    "num_training_steps": { "type": "integer" },
-    "eval_n_steps": { "type": "integer" },
-    "devices": { "type": "array", "items": { "type": "string" } }
+    "project_root": {
+      "type": "string"
+    },
+    "command": {
+      "type": "string"
+    },
+    "remote": {
+      "type": "boolean"
+    },
+    "hosts": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "object"
+        ]
+      }
+    },
+    "num_training_steps": {
+      "type": "integer"
+    },
+    "eval_n_steps": {
+      "type": "integer"
+    },
+    "devices": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
   }
 }

@@ -51,6 +51,11 @@
 2. 若 `current_step` 为 0，执行 Phase 0 校验：
    - 调用 `runtime/scripts/validate/validate_runtime.py runtime`。
    - 调用 `runtime/scripts/git/check_clean.sh <project_root>`。
+   - **若 `objective.remote` 为 true（首轮迭代开始前自动执行一次，幂等可重复）**：
+     调用 `runtime/scripts/training/generate_remote.sh runtime` 生成
+     `<project_root>/launchscripts/{copy_to_remote,train_on_remote,query_from_remote}.sh`；
+     再调用 `runtime/scripts/validate/validate_remote.py runtime` 校验 hosts 非空且 ssh 链可达。
+     校验不通过则记录 observer log 并暂停，不进入迭代。
    - 通过 observer 写入启动校验、校验通过或错误日志。
 3. 若进入 Phase 1（方向探索 → 票选 → 代码 → 同步），team-lead 创建**嵌套结构**的
    subagent，并**串行**驱动三个第一层 subagent：`orthogonal-direction-scout` →
@@ -94,17 +99,25 @@
       `action=update_decision`、`data.decision=<票选最高方法>`；写日志"票选最高方法完成"；
       states.json `current_step=4, next_step=5`。
    c. **coder 销毁 → 状态 5**：校验其 commit-result JSON；emit `exploration` 事件
-      `action=update_commit`、`data.commit_id=<最近一次提交 commit id>`；写日志"代码变更完成"；
+      `action=update_commit`、`data.commit_id=<commit id>`；写日志"代码变更完成"；
       states.json `current_step=5, next_step=6`。
-   d. **所有 subagent 销毁后 → 状态 6**：ssh 登录跳板机、从远程仓库同步代码；写日志
-      "代码上传成功"；states.json `current_step=6, next_step=7`。
+      （**remote 模式**：coder 不走 git，而是执行 `copy_to_remote.sh` 把代码覆盖到远端，
+      commit_id 为 sentinel `remote-sync:<first_host>`。）
+   d. **所有 subagent 销毁后 → 状态 6**：
+      - **remote=false（本地）**：ssh 登录跳板机、从远程仓库同步代码；写日志"代码上传成功"。
+      - **remote=true**：代码已由 coder 的 `copy_to_remote.sh` 覆盖上传，无需再次同步；写日志
+        "代码已同步至远端"。
+      states.json `current_step=6, next_step=7`。
 
    **恢复守卫**：当 `current_step ∈ {3,4,5}` 时，team-lead 检查该步对应的下一个一级
    嵌套 subagent 是否存在，不存在则补拉，保证管线跨会话/重启可续：
    - `current_step=3` ⇒ 拉起 `summarizer`（产出状态 4）。
    - `current_step=4` ⇒ 拉起 `coder`（产出状态 5）。
    - `current_step=5` ⇒ 无嵌套 agent，直接执行 ssh 同步（产出状态 6）。
-4. 若进入训练阶段（`current_step=6` → 7 → 8）。**本阶段两条硬规约,违反即视为严重错误**:
+4. 若进入训练阶段（`current_step=6` → 7 → 8）。**先判断 `objective.remote`**：
+   - `remote=true` → 走下方 **4'. 远程训练分支**（train_on_remote + query_from_remote）。
+   - `remote=false` → 走本地 a–d 流程。
+   **本阶段两条硬规约,违反即视为严重错误**:
    ① **只能通过 runtime 脚本驱动训练,严禁主程序自己改用 `uv` / `python` / `nohup`
    直跑训练或自建启动命令**;② **训练启动后必须立即用 Claude Code CLI 内部 cron
    (`CronCreate`) 轮询进度,严禁用前台 `sleep`(或 `sleep`+循环、`while sleep`、
@@ -129,6 +142,26 @@
       **立即 `CronDelete` 取消该轮询 cron**(绝不留孤儿 cron);emit observer `log` 事件
       "训练结束" + `state` 事件让 observer 写 states.json `current_step=8, next_step=9`;
       进入 Phase 9。
+4'. **远程训练分支（`objective.remote=true`）**。硬规约同上：① 只能通过既生成的
+   `launchscripts/{train_on_remote,query_from_remote}.sh` 驱动远程训练，**严禁主程序自己 ssh
+   直跑 python/nohup 或自造启动/监控命令**；② 启动后必须用 `CronCreate` 轮询，**严禁前台
+   `sleep`**。三件套已在 Phase 0 由 `generate_remote.sh` 生成（缺失则补生成一次）。
+
+   a. **状态 6 → 启动远程训练**：调用 `<project_root>/launchscripts/train_on_remote.sh <exp_name>`
+      （链式 ProxyJump 登录到 hosts 最后一个 host，cd 远端工作目录，nohup 挂起训练，回显远程 PID，
+      日志写远端 `~/<basename>/train-of-<exp_name>.log`，共享文件系统对第一个 host 可见）。
+      启动成功 → emit observer `log`"远程训练启动完成" + `state` 写 `current_step=7, next_step=8`。
+      若 `train_on_remote.sh` 返回非 0 或拿不到 PID：emit `log` 记录失败原因，emit `state` 回退
+      `current_step=5,next_step=6`，随后拉起注册 subagent `coder` 修被优化项目训练入口
+      （只改 `project_root` 下源码，不改 runtime/launchscripts），修好后重新 `copy_to_remote` 并重试。
+   b. **状态 7 → cron 轮询进度**：`CronCreate` 建定时任务，每次触发运行
+      `<project_root>/launchscripts/query_from_remote.sh <exp_name>`（登录 hosts 第一个 host，
+      取回远端日志到本地 `runtime/logs/train-of-<exp_name>.log`，再用 `monitor_training.py` 解析为
+      training-progress JSON）。**绝不用前台 `sleep`/`while sleep`，也不自己 ssh 跑监控。**
+   c. cron 每次触发读 query 输出判断是否结束/失败（如 train_step 达到 `num_training_steps`）。
+      训练结束 → **立即 `CronDelete`**（绝不留孤儿 cron）；emit `log`"训练结束" + `state` 写
+      `current_step=8, next_step=9`；进入 Phase 9。
+
 5. 若训练结束或失败，进入 Phase 9 经验回收：
    - **只调用 `summarizer` 协调者**（嵌套）：它用 `Task` 嵌套 spawn 三个 reviewer
      做 recovery analysis、在自己上下文里汇总，**只把 recovery-summary JSON 返回

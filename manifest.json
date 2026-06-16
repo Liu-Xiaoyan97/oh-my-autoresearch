@@ -124,6 +124,7 @@
       "scripts/git/latest_commit.sh",
       "scripts/git/sync_remote.sh",
       "scripts/training/generate_launch.sh",
+      "scripts/training/generate_remote.sh",
       "scripts/training/start_training.sh",
       "scripts/training/monitor_training.py",
       "scripts/training/parse_train_log.py",
