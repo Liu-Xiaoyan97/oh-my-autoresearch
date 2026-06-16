@@ -22,10 +22,14 @@ def _dest(h):
     return f"{user}@{host}" if user else host
 
 
-def _reachable(dest: str) -> tuple[bool, str]:
-    cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", dest, "echo ok"]
+def _reachable(dest: str, jumps: list[str]) -> tuple[bool, str]:
+    """检查 dest 可达；jumps 为其前驱跳板链（嵌套 host 经 ProxyJump 到达）。"""
+    cmd = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8"]
+    if jumps:
+        cmd += ["-J", ",".join(jumps)]
+    cmd += [dest, "echo ok"]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
         return (r.returncode == 0, r.stderr.strip() if r.returncode != 0 else "ok")
     except subprocess.TimeoutExpired:
         return (False, "timeout")
@@ -60,10 +64,11 @@ def main():
     checks.append({"name": "hosts_non_empty", "passed": True, "message": f"hosts: {dests}"})
 
     all_ok = True
-    for d in dests:
-        ok, msg = _reachable(d)
+    for i, d in enumerate(dests):
+        ok, msg = _reachable(d, dests[:i])  # 经前驱跳板链可达性
         all_ok = all_ok and ok
-        checks.append({"name": f"reachable:{d}", "passed": ok, "message": msg})
+        via = f" via {','.join(dests[:i])}" if i else ""
+        checks.append({"name": f"reachable:{d}{via}", "passed": ok, "message": msg})
 
     print(json.dumps({"valid": all_ok, "checks": checks}, ensure_ascii=False))
     sys.exit(0 if all_ok else 1)
