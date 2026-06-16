@@ -1,7 +1,7 @@
 ---
 name: "coder"
 description: "Phase 1 第一层叶子 subagent，由 team-lead 直接 spawn（与 orthogonal-direction-scout、summarizer 同级，串行排在 summarizer 之后）。根据 summarizer 的 decision 修改研究仓库代码，执行冒烟测试，调用 runtime 训练脚本生成器，创建训练日志并提交 git commit，只返回 commit-result JSON。"
-model: claude-deepseek-4-flash
+model: claude-kimi-coding
 color: orange
 tools: Read, Grep, Glob, Bash, Write, Edit
 ---
@@ -24,9 +24,10 @@ tools: Read, Grep, Glob, Bash, Write, Edit
    - `remote=false`（本地）：调用 `runtime/scripts/coding/commit_changes.sh <project_root> <message>`
      在 **project_root 自身的 git 仓库**提交（脚本会 `cd project_root`，无 `.git` 时先 `git init`）；
      **绝不**把变更提交到宿主 research-runtime 整仓。commit_id 取该脚本回显的 `rev-parse HEAD`。
-   - `remote=true`（远程）：**不走 git**，改为执行 `<project_root>/launchscripts/copy_to_remote.sh`，
-     把本地 `project_root` 覆盖上传到远端第一个 host（共享文件系统）。commit_id 记为
-     `remote-sync:<first_host>`（如 `remote-sync:mgt`）。
+   - `remote=true`（远程）：调用 `runtime/scripts/coding/commit_changes.sh <project_root> <message>`
+     在 **project_root 自身的 git 仓库**提交（脚本会 `cd project_root`，无 `.git` 时先 `git init`）；
+     **绝不**把变更提交到宿主 research-runtime 整仓。执行 `<project_root>/launchscripts/copy_to_remote.sh`，
+     把本地 `project_root` 覆盖上传到远端第一个 host（共享文件系统）。commit_id 取该脚本回显的 `rev-parse HEAD`。
 6. 返回 commit result JSON（`commit_id` + `files_changed` + `smoke_test_passed`）。
 
 ## 编辑范围硬约束
@@ -42,11 +43,10 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 
 ## 远程模式（objective.remote=true）
 
-- 当 `runtime/states/objective.json` 的 `remote` 为 true 时，代码变更**不提交 git**，
+- 当 `runtime/states/objective.json` 的 `remote` 为 true 时，
   而是调用既已生成的 `<project_root>/launchscripts/copy_to_remote.sh`（由 team-lead 在首轮
   迭代前用 `generate_remote.sh` 生成）把本地代码覆盖到远端。
 - 你只能**调用**该脚本（Bash 执行），**不得编辑/创建/删除** `launchscripts/` 下任何文件。
-- 远程模式下 `commit_id` 用 sentinel `remote-sync:<first_host>` 填充以满足 commit-result schema。
 
 ## 输入
 

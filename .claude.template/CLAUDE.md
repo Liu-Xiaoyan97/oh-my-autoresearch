@@ -50,7 +50,8 @@
 1. 读取 `runtime/states/states.json` 和 `runtime/states/objective.json`。
 2. 若 `current_step` 为 0，执行 Phase 0 校验：
    - 调用 `runtime/scripts/validate/validate_runtime.py runtime`。
-   - 调用 `runtime/scripts/git/check_clean.sh <project_root>`。
+   - **不检查 `project_root` 的 git 仓库**：project 由其自身独立仓库管理、coder 每轮提交，
+     Phase 0 无需校验其干净度（不调用 `check_clean.sh <project_root>`）。
    - **若 `objective.remote` 为 true（首轮迭代开始前自动执行一次，幂等可重复）**：
      调用 `runtime/scripts/training/generate_remote.sh runtime` 生成
      `<project_root>/launchscripts/{copy_to_remote,train_on_remote,query_from_remote}.sh`；
@@ -127,7 +128,8 @@
    b. 调用 `runtime/scripts/training/start_training.sh runtime <exp_name>` 启动训练
       (nohup 后台运行,**立即返回 PID**,日志写 `runtime/logs/train-of-<exp_name>.log`)。
       启动成功 → 状态 7:emit observer `log` 事件"训练启动完成" + `state` 事件让 observer
-      写 states.json `current_step=7, next_step=8`(team-lead 不自己写)。
+      写 states.json `current_step=7, next_step=8`(team-lead 不自己写)，并 emit `experiments`
+      事件 `action=insert_experiment`、`exp_name=<exp_name>` 建实验行(status=running)。
       如果生成的 launcher 不可执行、训练入口脚本不存在、参数不兼容或 `start_training.sh`
       返回非 0：立即 emit observer `log` 事件记录启动失败原因，emit `state` 事件回退
       `current_step=5,next_step=6`，随后拉起注册 subagent `coder`，把错误日志、launcher
@@ -138,9 +140,13 @@
       `runtime/scripts/training/monitor_training.py runtime <exp_name>` 解析进度并唤醒
       team-lead 检查。**绝不允许**用前台 `sleep`、`while sleep`、`sleep && monitor`
       之类的轮询循环,也不允许自己用 `uv run`/`python` 跑训练或监控。
+      **每次 cron 触发拿到 monitor 的 training-progress JSON 后,必须 emit `experiments` 事件
+      `action=update_metric`、`exp_name=<exp_name>`、`data={train_step,train_loss,val_step,val_metric}`
+      (取 JSON 对应字段),由 observer 写入 experiments 表——否则表内指标恒为 0。**
    d. cron 每次触发读 monitor 输出判断训练是否结束/失败。训练结束 → 状态 8:
       **立即 `CronDelete` 取消该轮询 cron**(绝不留孤儿 cron);emit observer `log` 事件
       "训练结束" + `state` 事件让 observer 写 states.json `current_step=8, next_step=9`;
+      并 emit `experiments` 事件 `action=mark_complete`、`exp_name=<exp_name>`(status=completed);
       进入 Phase 9。
 4'. **远程训练分支（`objective.remote=true`）**。硬规约同上：① 只能通过既生成的
    `launchscripts/{train_on_remote,query_from_remote}.sh` 驱动远程训练，**严禁主程序自己 ssh
@@ -150,7 +156,7 @@
    a. **状态 6 → 启动远程训练**：调用 `<project_root>/launchscripts/train_on_remote.sh <exp_name>`
       （链式 ProxyJump 登录到 hosts 最后一个 host，cd 远端工作目录，nohup 挂起训练，回显远程 PID，
       日志写远端 `~/<basename>/train-of-<exp_name>.log`，共享文件系统对第一个 host 可见）。
-      启动成功 → emit observer `log`"远程训练启动完成" + `state` 写 `current_step=7, next_step=8`。
+      启动成功 → emit observer `log`"远程训练启动完成" + `state` 写 `current_step=7, next_step=8`，并 emit `experiments` `action=insert_experiment`、`exp_name=<exp_name>` 建实验行(status=running)。
       若 `train_on_remote.sh` 返回非 0 或拿不到 PID：emit `log` 记录失败原因，emit `state` 回退
       `current_step=5,next_step=6`，随后拉起注册 subagent `coder` 修被优化项目训练入口
       （只改 `project_root` 下源码，不改 runtime/launchscripts），修好后重新 `copy_to_remote` 并重试。
@@ -158,9 +164,12 @@
       `<project_root>/launchscripts/query_from_remote.sh <exp_name>`（登录 hosts 第一个 host，
       取回远端日志到本地 `runtime/logs/train-of-<exp_name>.log`，再用 `monitor_training.py` 解析为
       training-progress JSON）。**绝不用前台 `sleep`/`while sleep`，也不自己 ssh 跑监控。**
+      **每次 cron 触发拿到该 JSON 后必须 emit `experiments` `action=update_metric`、`exp_name=<exp_name>`、
+      `data={train_step,train_loss,val_step,val_metric}` 写入 experiments 表(否则指标恒为 0)。**
    c. cron 每次触发读 query 输出判断是否结束/失败（如 train_step 达到 `num_training_steps`）。
-      训练结束 → **立即 `CronDelete`**（绝不留孤儿 cron）；emit `log`"训练结束" + `state` 写
-      `current_step=8, next_step=9`；进入 Phase 9。
+      训练结束 → **主程序必须立即 `CronDelete` 取消该轮询 cron**（远程训练同样绝不留孤儿 cron）；
+      emit `log`"训练结束" + `experiments` `action=mark_complete`、`exp_name=<exp_name>`(status=completed)
+      + `state` 写 `current_step=8, next_step=9`；进入 Phase 9。
 
 5. 若训练结束或失败，进入 Phase 9 经验回收：
    - **只调用 `summarizer` 协调者**（嵌套）：它用 `Task` 嵌套 spawn 三个 reviewer

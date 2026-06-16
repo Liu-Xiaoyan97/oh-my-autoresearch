@@ -75,6 +75,9 @@ if devices:
 if cuda_ids:
     env_prefix += "export CUDA_VISIBLE_DEVICES=" + shlex.quote(",".join(cuda_ids)) + "; "
 
+env_prefix += "export HF_HUB_OFFLINE=1; "
+env_prefix += "export TRANSFORMERS_OFFLINE=1; "
+
 print(json.dumps({
     "first": first, "last": last, "jump": jump,
     "project_root": str(project_root), "basename": basename,
@@ -131,7 +134,7 @@ EOF
 cat >> "$COPY" <<'EOF'
 echo "→ 上传 $PROJECT_ROOT/ → $FIRST_DEST:~/$REMOTE_DIR/ (rsync --delete 覆盖)" >&2
 ssh -o BatchMode=yes "$FIRST_DEST" "mkdir -p $REMOTE_DIR"
-rsync -a --whole-file --inplace --delete --exclude='__pycache__/' --exclude='output/' -e "ssh -T -o Compression=no -o BatchMode=yes" "$PROJECT_ROOT/" "$FIRST_DEST:$REMOTE_DIR/"
+rsync -a --whole-file --inplace --exclude='__pycache__/'  --exclude='.venv/' --exclude='uv.lock' --exclude='pyproject.toml' --exclude='.python-version' --exclude='output/' --exclude='launchscripts/' --exclude='runtime'  -e "ssh -T -o Compression=no -o BatchMode=yes" "$PROJECT_ROOT/" "$FIRST_DEST:$REMOTE_DIR/"
 echo "✓ copy_to_remote 完成: $FIRST_DEST:~/$REMOTE_DIR" >&2
 EOF
 
@@ -145,7 +148,7 @@ JUMP_OPT=$(printf '%q' "$JUMP_OPT")
 REMOTE_DIR=$(printf '%q' "$BASENAME")
 COMMAND=$(printf '%q' "$COMMAND")
 EXTRA_ARGS=$(printf '%q' "$EXTRA_ARGS")
-ENV_PREFIX=$(printf '%q' "$ENV_PREFIX")
+ENV_PREFIX="$ENV_PREFIX"
 DEFAULT_EXP=$(printf '%q' "$EXP_NAME")
 EOF
 cat >> "$TRAIN" <<'EOF'
