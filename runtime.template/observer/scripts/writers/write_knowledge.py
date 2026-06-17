@@ -5,6 +5,7 @@
 """
 
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ SCRIPTS_ROOT = Path(__file__).resolve().parents[3] / "scripts"
 sys.path.insert(0, str(SCRIPTS_ROOT / "utils"))
 sys.path.insert(0, str(SCRIPTS_ROOT / "database"))
 from atomic_write import atomic_write
-from schema_spec import states_exp_name
+from schema_spec import DB_PATH, states_exp_name
 
 
 def write(runtime_root: str, payload: dict) -> bool:
@@ -30,6 +31,31 @@ def write(runtime_root: str, payload: dict) -> bool:
         resolved = states_exp_name(runtime_root) or data.get("exp_name", "")
         if resolved:
             data = {**data, "exp_name": resolved}
+
+        # method_summary 自动解析：优先从 exploration 表的 decision 列读取
+        # decision 已被 write_exploration._resolve_decision_name 解析为候选名
+        ms = data.get("method_summary", "")
+        if not ms or ms.startswith("candidate_"):
+            try:
+                db_path = Path(runtime_root) / DB_PATH
+                if db_path.exists():
+                    conn = sqlite3.connect(str(db_path))
+                    row = conn.execute(
+                        'SELECT "decision" FROM exploration WHERE exp_name = ?',
+                        (data.get("exp_name", ""),),
+                    ).fetchone()
+                    conn.close()
+                    if row and row[0]:
+                        raw = row[0]
+                        try:
+                            decision_name = json.loads(raw)
+                        except (json.JSONDecodeError, TypeError):
+                            decision_name = raw
+                        if isinstance(decision_name, str) and decision_name and \
+                           not decision_name.startswith("candidate_"):
+                            data["method_summary"] = decision_name
+            except Exception:
+                pass  # 解析失败不影响主流程
 
     knowledge_dir = Path(runtime_root) / "knowledges"
     knowledge_dir.mkdir(parents=True, exist_ok=True)

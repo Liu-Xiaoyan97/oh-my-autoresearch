@@ -152,7 +152,7 @@
   },
   "install_targets": {
     "claude_target": ".claude/",
-    "runtime_target": "runtime/",
+    "runtime_target": "runtime/"
   },
   "supported_commands": [
     "/loop",

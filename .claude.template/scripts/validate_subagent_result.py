@@ -6,8 +6,10 @@
 
 校验通过后自动 emit 对应事件（无需 LLM 手动调用 emit_event.py）：
     orthogonal-direction-scout (phase=1) → exploration update_orthogonal_candidates
+                                        + candidate_pool update
     summarizer (phase=1)                  → exploration update_decision
-    coder                                 → exploration update_commit
+                                        + candidate_pool remove
+    coder (phase=5)                       → exploration update_commit
     summarizer (phase=9)                  → 跳过（需 LLM 对比 baseline 后决定）
 
 用法:
@@ -39,6 +41,18 @@ EMIT_MAP = {
         # coder phase=1: patch-plan 无 commit 信息，不自动发射
         # coder phase=5: commit-result，发射 update_commit
         5: ("exploration", {"action": "update_commit"}),
+    },
+}
+
+# candidate_pool 自动发射映射 —— 在 exploration 事件之后额外发射
+# 值格式: (event_type, payload_template_builder(data, runtime_root) -> dict | None)
+# 返回 None 表示跳过
+CANDIDATE_POOL_EMIT_MAP = {
+    "orthogonal-direction-scout": {
+        1: lambda data, root: _build_candidate_pool_update(data),
+    },
+    "summarizer": {
+        1: lambda data, root: _build_candidate_pool_remove(data, root),
     },
 }
 # ────────────────────────────────────────────────────────────────
@@ -112,6 +126,103 @@ def _auto_emit(agent_name: str, phase: int, data: dict, runtime_root: str) -> di
         return {"emitted": False, "error": str(e)}
 
 
+def _build_candidate_pool_update(data: dict) -> dict | None:
+    """从 orthogonal-direction-scout 的返回中提取 candidates，构建 update 事件 payload。"""
+    candidates = data.get("candidates", data) if isinstance(data, dict) else data
+    if not isinstance(candidates, list) or not candidates:
+        return None
+    # 确保每个候选有 name 和 description
+    sanitized = []
+    for c in candidates:
+        if isinstance(c, dict) and c.get("name"):
+            sanitized.append({
+                "name": str(c["name"]),
+                "description": str(c.get("description", c.get("name", ""))),
+            })
+    if not sanitized:
+        return None
+    return {
+        "event_type": "candidate_pool",
+        "payload": {
+            "action": "update",
+            "data": {"candidates": sanitized},
+        },
+    }
+
+
+def _build_candidate_pool_remove(data: dict, runtime_root: str) -> dict | None:
+    """从 summarizer 的 decision 中提取 selected_candidate 索引，
+    读取候选池文件解析为 name，构建 remove 事件 payload。"""
+    idx = data.get("selected_candidate")
+    if idx is None:
+        return None
+    if not isinstance(idx, int):
+        try:
+            idx = int(idx)
+        except (ValueError, TypeError):
+            return None
+
+    # 读取候选池文件，按索引获取 name
+    pool_path = Path(runtime_root) / "knowledges" / "candidate_pool.json"
+    if not pool_path.exists():
+        return None
+
+    try:
+        pool = json.loads(pool_path.read_text(encoding="utf-8"))
+        if not isinstance(pool, list) or idx < 0 or idx >= len(pool):
+            return None
+        name = pool[idx].get("name", "")
+        if not name:
+            return None
+        return {
+            "event_type": "candidate_pool",
+            "payload": {
+                "action": "remove",
+                "data": {"name": name},
+            },
+        }
+    except (json.JSONDecodeError, IndexError, TypeError):
+        return None
+
+
+def _emit_one_event(event_spec: dict, runtime_root: str) -> dict:
+    """发射单个事件。event_spec: {event_type, payload}"""
+    emit_py = _emit_path(runtime_root)
+    if not Path(emit_py).exists():
+        return {"emitted": False, "error": f"emit_event.py 不存在: {emit_py}"}
+
+    payload_str = json.dumps(event_spec["payload"], ensure_ascii=False)
+    try:
+        result = subprocess.run(
+            ["python3", emit_py, event_spec["event_type"], payload_str, runtime_root],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            return {"emitted": True,
+                    "event_type": event_spec["event_type"],
+                    "action": event_spec["payload"].get("action")}
+        else:
+            return {"emitted": False, "error": result.stderr.strip() or result.stdout.strip()}
+    except Exception as e:
+        return {"emitted": False, "error": str(e)}
+
+
+def _auto_emit_candidate_pool(agent_name: str, phase: int, data: dict, runtime_root: str) -> dict | None:
+    """校验通过后自动发射 candidate_pool 事件（如有配置）。"""
+    agent_config = CANDIDATE_POOL_EMIT_MAP.get(agent_name, {})
+    builder = agent_config.get(phase, agent_config.get("*"))
+    if not builder:
+        return None
+
+    try:
+        event_spec = builder(data, runtime_root)
+        if event_spec is None:
+            return {"emitted": False, "reason": "builder 返回 None（跳过）"}
+        return _emit_one_event(event_spec, runtime_root)
+    except Exception as e:
+        return {"emitted": False, "error": str(e)}
+
+
 def validate(agent_name: str, phase: int, json_file: str, runtime_root: str) -> dict:
     """校验 subagent 返回的 JSON 是否符合对应 schema。"""
     data = json.loads(Path(json_file).read_text(encoding="utf-8"))
@@ -160,6 +271,11 @@ def validate(agent_name: str, phase: int, json_file: str, runtime_root: str) -> 
         # ── 校验通过，自动发射事件 ──
         emit_result = _auto_emit(agent_name, phase, data, runtime_root)
         result["auto_emitted"] = emit_result
+
+        # ── candidate_pool 附加发射 ──
+        cp_emit_result = _auto_emit_candidate_pool(agent_name, phase, data, runtime_root)
+        if cp_emit_result is not None:
+            result["candidate_pool_emitted"] = cp_emit_result
 
         return result
     except jsonschema.ValidationError as e:

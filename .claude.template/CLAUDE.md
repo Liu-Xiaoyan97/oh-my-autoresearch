@@ -95,6 +95,16 @@
    `summarizer` → `coder`。scout 与 summarizer 各自用 `Task` **并行**嵌套 spawn 第二层
    reviewer；team-lead **绝不**自己直接调 reviewer（二级输出不进 team-lead 上下文）。
 
+   **候选池（candidate_pool）机制**：`knowledges/candidate_pool.json` 记录跨轮次共享的
+   正交候选集，格式为 `[{"name": "<方法名>", "description": "<描述>"}]`。
+   你必须在 spawn scout 之前**读取该文件**：
+   - 若**非空**（有候选未实验）：把整个候选池内容传给 scout 作为预分配候选集，要求 scout
+     模拟三个 reviewer 评审这些候选（跳过生成新候选），直接做正交去重后返回。
+   - 若**为空**：scout 正常生成新的正交候选集（必须与 knowledges 中
+     rejected/learned/baseline 已记载的方法均正交）。
+   - scout 返回后，`validate_subagent_result.py` 自动发射 `candidate_pool update` 事件，
+     observer 将新候选集写入池文件（若 scout 已有池候选则覆盖写入去重后的完整集合）。
+
    嵌套结构：
 
    ```
@@ -128,14 +138,19 @@
 
    a. **scout 销毁 → 状态 3**：调用 `validate_subagent_result.py` 校验其 orthogonal-set JSON
       （**该脚本自动** emit `exploration` 事件 `action=update_orthogonal_candidates`、
-      `data.orthogonal_direction_scout=<去重后正交候选集>`）。写日志"正交候选集生成完成"；
+      `data.orthogonal_direction_scout=<去重后正交候选集>`；
+      **并自动** emit `candidate_pool update` 事件将候选集写入
+      `knowledges/candidate_pool.json`）。写日志"正交候选集生成完成"；
       emit `state` 事件 `current_step=3, next_step=4`。
-      ⚠ **注意**：exploration 事件已被自动发射，**不要**再手动调 emit_event.py。
+      ⚠ **注意**：exploration 和 candidate_pool 事件均已被自动发射，**不要**再手动调 emit_event.py。
    b. **summarizer 销毁 → 状态 4**：调用 `validate_subagent_result.py` 校验其 decision JSON
       （**该脚本自动** emit `exploration` 事件 `action=update_decision`、
-      `data.decision=<票选最高方法>`）。写日志"票选最高方法完成"；
+      `data.decision=<票选最高方法>`；
+      **并自动** emit `candidate_pool remove` 事件从
+      `knowledges/candidate_pool.json` 中删除被选中的候选）。
+      写日志"票选最高方法完成"；
       emit `state` 事件 `current_step=4, next_step=5`。
-      ⚠ **注意**：exploration 事件已被自动发射，**不要**再手动调 emit_event.py。
+      ⚠ **注意**：exploration 和 candidate_pool 事件均已被自动发射，**不要**再手动调 emit_event.py。
    c. **coder 销毁 → 状态 5**：调用 `validate_subagent_result.py phase=5` 校验其 commit-result JSON
       （**该脚本自动** emit `exploration` 事件 `action=update_commit`、
       `data.commit_id=<commit id>`）。写日志"代码变更完成"；
@@ -252,12 +267,16 @@ python3 runtime/observer/scripts/ingest/emit_event.py <event_type> '<payload_jso
 - `state`（更新 `runtime/states/states.json` 的检查点；payload 含
   `current_step`/`next_step`/`iteration`/`exp_name`，只更新给出的字段。由
   `observer/scripts/writers/write_state.py` 落盘——**这是 team-lead 推进状态的唯一途径**）
+- `candidate_pool`（维护 `knowledges/candidate_pool.json` 候选池；
+  `action=update` 用新候选集覆盖文件，`action=remove` 从池中删除已实验的候选。
+  scout 与 summarizer 返回时由 `validate_subagent_result.py` 自动发射，
+  **你无需手动发射此事件**）
 
 payload 必须符合 `runtime/observer/schemas/*.schema.json`。
 
-> ⚠ **注意**：`exploration` 事件在 `validate_subagent_result.py` 中已实现**自动发射**。
-> 在 subagent 返回后，只需调用 `validate_subagent_result.py` 校验结果，无需再手动
-> 调用 `emit_event.py` 发射 exploration 事件。Phase 0 的 `validate_runtime.py` 会自动
+> ⚠ **注意**：`exploration` 与 `candidate_pool` 事件在 `validate_subagent_result.py` 中
+> 已实现**自动发射**。在 subagent 返回后，只需调用 `validate_subagent_result.py` 校验结果，
+> 无需再手动调用 `emit_event.py` 发射这些事件。Phase 0 的 `validate_runtime.py` 会自动
 > 校验事件链完整性（参见 `validate_event_chain.py`）。
 
 **写入参数一律"文件优先"：凡有权威文件来源的上下文参数，writer 一律从文件读取，payload 只作兜底**，
@@ -266,8 +285,10 @@ team-lead 无需（也不应依赖）在 payload 里给定它们：
 - `exp_name`：所有 writer（`experiments`/`exploration`/`knowledge`/`log`）统一从
   `states.json.exp_name` 读取（`schema_spec.states_exp_name`）。即使 payload 省略或给错，
   observer 也会落到当前实验；`clear_all` 无需 `exp_name`。
-- `knowledge` 条目的 `data.exp_name` 由 writer 注入为 `states.json.exp_name`（`method_summary`/
-  `reason` 等真内容仍来自 payload）。
+- `knowledge` 条目的 `data.exp_name` 由 writer 注入为 `states.json.exp_name`；
+  `data.method_summary` **也由 writer 自动解析**——从 exploration 表的 decision 列
+  （已解析为候选方法名）读取，而非依赖 payload 中的 `method_summary`。
+  所以你无需在 knowledge 事件的 payload 里提供 `method_summary`。
 - experiments 的指标列名由 writer 从 `objective.json`（`primary_metrics.name`/`eval_n_steps`）推导。
 
 **唯一例外是 `state` 事件**：它是 `states.json` 的写入者本身，payload 即 team-lead 决定的状态
@@ -303,11 +324,14 @@ team-lead 需要校验的 JSON（第一层返回，**exploration 事件自动发
 
 ## 事件自动发射与守卫
 
-`validate_subagent_result.py` 校验通过后**自动发射**对应 exploration 事件：
-- `orthogonal-direction-scout` phase=1 → `exploration update_orthogonal_candidates`
-- `summarizer` phase=1 → `exploration update_decision`
-- `coder` phase=5 → `exploration update_commit`
-- `summarizer` phase=9 → 不自动发射（由 LLM 对比 baseline 后手动决定 knowledge 事件）
+`validate_subagent_result.py` 校验通过后**自动发射**对应 events（无需手动调用 emit_event.py）：
+
+| Agent (phase) | 自动发射的事件 |
+|---------------|---------------|
+| `orthogonal-direction-scout` phase=1 | `exploration update_orthogonal_candidates` + `candidate_pool update` |
+| `summarizer` phase=1 | `exploration update_decision` + `candidate_pool remove` |
+| `coder` phase=5 | `exploration update_commit` |
+| `summarizer` phase=9 | 不自动发射（由 LLM 对比 baseline 后手动决定 knowledge 事件） |
 
 Phase 0 校验（`validate_runtime.py`）自动检测事件链完整性，若缺失可通过
 `validate_event_chain.py --fix` 自动修复。

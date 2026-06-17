@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 DB_PATH = "db/runtime.sqlite"
+CANDIDATE_POOL_PATH = "knowledges/candidate_pool.json"
 EXPLORATION_COLUMNS = ["exp_name", "orthogonal-direction-scout", "decision", "commit"]
 
 

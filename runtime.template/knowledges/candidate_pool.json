@@ -1,0 +1,254 @@
+[
+  {
+    "name": "SwiGLU 乘积方差补偿——提高 MLP c_proj 初始化标准差",
+    "description": "MLP SwiGLU 分支残差贡献 L2=2.09 而 Attention L2=4.43，方差比 4.51:1。当前 c_proj init=0.02/sqrt(2)=0.01414 补偿不足，提升至 0.02（1.414x）使方差比降至约 1.13x。"
+  },
+  {
+    "name": "SwiGLU 值分支 c_fc2 偏置初始化至 +0.5",
+    "description": "当前 c_fc2.bias 为零，gate*value 无信号。偏置 +0.5 确保非零正激活从第一步开始。改 _init_weights 中含 c_fc2 的 bias。"
+  },
+  {
+    "name": "beta2-to-099",
+    "description": "Increase beta2 from 0.95 to 0.99, extending Adam's variance estimation memory window from 20 steps to 100 steps. exp_6 tested 0.98 (window=50) and showed improvement; 0.99 is the next frontier, providing smoother gradient variance estimates over longer horizons."
+  },
+  {
+    "name": "branch-output-init-math-restoration",
+    "description": "attn c_proj std=0.0283, MLP c_proj std=0.04，系统修复 c_proj 初始化"
+  },
+  {
+    "name": "correct-embed-gain-to-theoretical-optimum",
+    "description": "将 embed_gain 从 1.805 提升至理论最优 3.125"
+  },
+  {
+    "name": "cosine-lr-minlr-plateau-extension",
+    "description": "余弦衰减前 70% steps(0→140)，后 30% 常数 5e-5"
+  },
+  {
+    "name": "cosine-lr-plateau-short-training",
+    "description": "前150步恒定3e-4, 后50步余弦退火至1e-5, 不改变训练步数"
+  },
+  {
+    "name": "depth-aware-residual-exponential-scaling",
+    "description": "1/sqrt(2) 替换为 α_l=exp(-l/(2L))，等化各层梯度量级"
+  },
+  {
+    "name": "depth-aware-residual-scaling",
+    "description": "固定 1/sqrt(2) 替换为每层可学习 s_i，自适应分支协方差结构"
+  },
+  {
+    "name": "emb-grad-rebalance",
+    "description": "在 embedding 输出进入第一个 Pre-LN 之前，乘以缩放因子 lambda（建议 1.5-2.0），利用 Pre-LN 的尺度不变性（LN(lambda*x) = LN(x)）在不改变前向信号分布的前提下，仅放大 embedding 路径梯度 lambda 倍。权重绑定下 lm_head 梯度占主导（exp_7 后 Frobenius norm 31.0），embedding 路径弱得多（估计 15-20）。lambda 使两条梯度路径范数相当，每个 step 的 embedding 更新信号增强 50-100%。置信度: 4/5"
+  },
+  {
+    "name": "embed-gain-full-normalization",
+    "description": "将 embed_gain 从当前的 1/(sqrt(n_embd)*init_range)=1.805 提升至 sqrt(3)/(sqrt(n_embd)*init_range)=3.125，使 embedding 输出 L2 范数真正归一化至 1.0（当前仅 0.578，为理论目标的 57.7%）。exp_1 的 learned 条目已明确记录理论最优值公式为 sqrt(3)/... 。从 exp_1 的 3.26x 提升再进一步至 5.64x 提升，信号幅度提高 73%。"
+  },
+  {
+    "name": "enable-output-gate",
+    "description": "Enable learnable residual gates by setting use_output_gate=True. Already implemented in the codebase but currently flagged off. Each transformer layer gets a learnable tanh gate that replaces the fixed 1/sqrt(2) scaling in the Parallel Block. This allows the model to learn layer-specific residual contributions rather than applying uniform scaling."
+  },
+  {
+    "name": "enable-separate-output-gate",
+    "description": "将 ParallelTransformerBlock 的单一残差门控拆分为独立 gate_attn 和 gate_mlp"
+  },
+  {
+    "name": "final-ln-before-lm-head",
+    "description": "在 lm_head 投影之前插入一个可学习的 LayerNorm，归一化残差流终态的方差到 std=1.0。Pre-LN 架构下残差流方差随深度线性增长（Var(x_L) ≈ 1 + 2L），导致 lm_head 看到分布随深度的有偏输入。该 LN 消除方差对层数的依赖，与 exp_7 的 softplus 缩放形成互补修复——一个修正分布、一个修正幅度，预期超加性收益。置信度: 5/5"
+  },
+  {
+    "name": "gradient-clip-ema-smooth",
+    "description": "前 10 步 beta=0.8，10-50 步线性升至 0.95，消除重置跳变"
+  },
+  {
+    "name": "gradient-clip-ema-smoothing",
+    "description": "Remove the abrupt reset of the gradient norm EMA at step=warmup_steps. Currently the grad_norm_ema is reset at warmup end, causing a discontinuity in the clipping threshold. Replace with smooth exponential transition: grad_norm_ema = (1 - decay) * global_norm + decay * grad_norm_ema, with decay transitioning linearly from init_decay to target_decay over warmup_steps."
+  },
+  {
+    "name": "gradient-clip-ema-warmup-smooth",
+    "description": "前 50 步 EMA beta 从 0 线性升至 0.999，防早期方差尖峰污染"
+  },
+  {
+    "name": "gradient-clip-warmup-smooth",
+    "description": "消除梯度裁剪 EMA 在 warmup 结束时的硬重置（step==warmup_steps 时 grad_norm_ema = total_norm），改用平滑的 EMA 初始化。当前逻辑在 warmup 结束时丢弃整个 warmup 期间 norm 统计，导致梯度裁剪阈值在训练阶段突变。改进：用理论梯度 norm 值初始化 EMA，或完全移除硬重置逻辑。"
+  },
+  {
+    "name": "head-wise-entropy-momentum-guard",
+    "description": "注意力头熵 EMA 守卫，防注意力坍缩"
+  },
+  {
+    "name": "hybrid-parallel-sequential",
+    "description": "Use Parallel Block for the first 6 layers and Sequential Block for the last 6 layers of the 12-layer transformer. Shallow (early) layers benefit from parallel processing because their primary role is token-level representation — attention and MLP process largely independent features. Deep (late) layers benefit from serial processing because MLP needs to see attention's output for higher-order reasoning (SwiGLU nonlinearity on attended features)."
+  },
+  {
+    "name": "increase-lr-to-6e-4",
+    "description": "Double the peak learning rate from 3e-4 to 6e-4. Parallel Block architecture applies 1/sqrt(2) scaling to each branch's output before summing, so the effective update per branch is ~0.707x of a serial block. Doubling the LR compensates for this attenuation."
+  },
+  {
+    "name": "increase-warmup-to-20",
+    "description": "Increase warmup steps from 10 to 20. With beta2=0.95, Adam's v_t (second moment estimate) has an effective memory window of 1/(1-beta2) = 20 steps. A 10-step warmup reaches only ~60% of steady-state variance estimate (1 - 0.95^10 = 0.40). Doubling warmup to 20 steps allows v_t to reach ~64% of steady state, providing more reliable adaptive LR scaling from the start of training."
+  },
+  {
+    "name": "lm-head-logit-temperature",
+    "description": "权重绑定 lm_head 前加可学习温度缩放"
+  },
+  {
+    "name": "ln-gain-depth-scaling",
+    "description": "按深度线性递增 ln_1 gain"
+  },
+  {
+    "name": "ln-init-random",
+    "description": "Enable random LayerNorm weight initialization by setting ln_init_random=True. Currently LN weights (gain) are initialized to all-ones, which means every layer starts with identical normalization behavior. Random initialization breaks this symmetry, allowing different layers to learn different normalization scales from the start."
+  },
+  {
+    "name": "ln-init-random-perturbation",
+    "description": "启用 ln_init_random=True，N(1.0, 0.02) 扰动"
+  },
+  {
+    "name": "ln-weight-decay-regularize",
+    "description": "对 LayerNorm 的 weight 参数施加轻度权重衰减 WD=0.01（当前 decay=0 被排除在 decay 组外）。LN weight 在短训练中可从 1.0 增长到约 1.5（exp_2 隐含），轻度 WD 约束防止 LN 过度放大残差信号。仅影响 norm 的 weight（scale 项），norm bias 和 tau/gate 仍保持 0 WD。"
+  },
+  {
+    "name": "ln_f 替换为 RMSNorm",
+    "description": "将最终归一化层 ln_f 从标准 LayerNorm 替换为 RMSNorm（移除均值中心化）。深层残差流自然去中心化，LayerNorm 的均值中心化价值有限。新增 RMSNorm 类和 CLI flag。"
+  },
+  {
+    "name": "logit-grad-norm",
+    "description": "对交叉熵损失关于 logits 的梯度 (p - y) 进行 L2 归一化后乘以目标范数 eta_target，保持梯度方向不变仅调幅度。模型训练后期从随机（||p-y||≈1.414）到确信（||p-y||衰减 36-93%）过程中梯度自然衰减，该归一化防止后半段梯度消失。与 exp_7（缩放 softmax 输入改变分布形状）正交——exp_7 改变梯度方向，本方案仅调梯度幅度，可叠加：z_scale=alpha*z, dL/dz=alpha*eta*(p_scale-y)/||p_scale-y||。置信度: 3/5"
+  },
+  {
+    "name": "math-gate-init-1-sqrt2",
+    "description": "gate init from -1.0(0.238) 改至 atanh(1/sqrt(2)-1)≈-0.302(0.707)"
+  },
+  {
+    "name": "parallel-block-branch-beta",
+    "description": "在 Parallel Block 中，用可学习的每层分支混合系数 beta=sigmoid(b) ∈ (0,1) 替换固定的 1/sqrt(2) 缩放。输出公式：out = x + (beta*attn_out + (1-beta)*mlp_out) / sqrt(beta^2 + (1-beta)^2)。b 初始化为 0（beta=0.5），等号于原始 1/sqrt(2) 设置。与已 learned 的 exp_2 (separate output gate) 区别：exp_2 学到独立 gate_attn/gate_mlp 绝对值导致趋同，本方案只控制两者的相对权重，与绝对尺度解耦，梯度更清晰。"
+  },
+  {
+    "name": "parallel-block-branch-init-balance",
+    "description": "提升 attn c_proj init std，使 attn/mlp 分支贡献方差从 1:96.6 平衡至 ~1:3"
+  },
+  {
+    "name": "parallel-branch-init-balance",
+    "description": "Address two numerical imbalances in the Parallel Block: (1) Increase MLP c_proj init std from 0.02/sqrt(2) to 0.02 — currently MLP contributes ~16% of residual variance vs Attention ~30%+, balancing to ~35% ensures both branches have comparable influence at initialization. (2) Bias-initialize c_fc1 (first feed-forward layer in SwiGLU) to +1.0 — ~34% of SwiGLU gates are currently near-zero, meaning those neurons are effectively dead; positive bias activation reduces dead-neuron fraction."
+  },
+  {
+    "name": "per-head-tau",
+    "description": "将注意力温度 tau 从单标量扩展为每头独立（12 个值），每个 head 拥有自己的 softplus(tau_h) 控制 attention logits 缩放。单 tau 对所有头施加相同的 sharpness，限制了头的差异化表达。仅增加 11 个参数（几乎零开销），初始 -2.02（softplus≈0.125）使所有头从当前基线相同的起点出发，此后可在训练中自由分化。修改 Attention.__init__ 中 self.tau 的 shape 从 (1,) 改为 (n_head,)。"
+  },
+  {
+    "name": "pre-lm-head-var-norm",
+    "description": "ln_f 与 lm_head 间插入 RMSNorm，消除残差流方差波动对 logit 标度影响"
+  },
+  {
+    "name": "pre-ln-branch-separate-norm",
+    "description": "共享 ln_1 拆 ln_attn/ln_mlp, 使门控参数真正分化学习"
+  },
+  {
+    "name": "pre-swiglu-rmsnorm",
+    "description": "在 SwiGLU 的 SiLU(gate) 和 value 分支进行元素乘积前，分别施加 RMSNorm（无偏置、无仿射变换），使每个维度的幅度在乘积前被归一化到 RMS=1。这与 QK-Norm 对 Q/K 在点积前归一化的思路对应。MLP.__init__ 中新增两个 RMSNorm(n_inner)，forward 中 gate_out = F.silu(rmsnorm_gate(c_fc1(x))), value_out = rmsnorm_val(c_fc2(x))。与已否决的 exp_5 (post-hoc scalar) 区别在于：exp_5 用单一标量统一缩放乘积后输出，pre-RMSNorm 每维度独立归一化，机制更强。"
+  },
+  {
+    "name": "qk-norm-attention-scaling",
+    "description": "QK-Norm 时移除 1/sqrt(head_dim) 缩放"
+  },
+  {
+    "name": "remove-layer-grouped-wd",
+    "description": "Simplify the current 5-group Layer-Grouped Weight Decay scheme (embed, attn, mlp, 1d, other) to a single unified WD=0.1. The 5-group scheme interacts nonlinearly with Adam's per-parameter adaptivity, making it hard to predict the effective regularization per layer. A unified WD simplifies the optimization landscape and has negligible effect in 200-step training where weight decay's primary benefit (preventing weight growth) is minimal."
+  },
+  {
+    "name": "remove-v-norm",
+    "description": "Set use_v_norm=False. V-Norm normalizes the attention output values before the residual connection. While this may stabilize training by bounding attention output magnitudes, it may also constrain expressiveness by preventing attention from producing outputs with strong magnitudes. QK-Norm and Pre-LN already provide sufficient normalization."
+  },
+  {
+    "name": "residual-depth-normalizer",
+    "description": "在每个 Pre-LN 并行块中，将子层输出加回残差流前乘以 alpha=1/sqrt(num_layers)，防止残差流方差随深度线性增长（Var(x_L) = 1 + 2L）。这是 DeepNet/DeepNorm 系列的标准方法，结构性修复而非初始化微调，绕过 Pre-LN 的三重吸收机制。确保各层梯度良态，浅层和深层优化景观一致，在短训练中应立即体现收敛改善。置信度: 4/5"
+  },
+  {
+    "name": "residual-depth-variance-attenuation",
+    "description": "残差缩放从 /sqrt(2) 改为 0.628，补偿深度方差积累 2.27x"
+  },
+  {
+    "name": "rope-theta-short-context",
+    "description": "RoPE base theta 从 10000 降低至 ~1000"
+  },
+  {
+    "name": "separate-parallel-norm-per-branch",
+    "description": "在 ParallelTransformerBlock 中，将当前共享的 ln_1 拆分为独立的 ln_attn（用于 attention 分支）和 ln_mlp（用于 MLP 分支），使两个分支可以各自学习该分支的归一化统计。attention 输出是 token 混合后的加权和（方差受序列长度影响），MLP 输出是 per-token 的 SwiGLU 非线性变换（SiLU 非对称分布），两者数值分布本质不同。分离 LN 让每个分支学习各自的 scale/shift。"
+  },
+  {
+    "name": "swiglu-branch-independent-norm",
+    "description": "SwiGLU 的 gate/value 分支前加独立 LN，解耦梯度相互干扰"
+  },
+  {
+    "name": "swiglu-gate-bias-asymmetric-init",
+    "description": "对 SwiGLU 的 gate 分支（c_fc1）偏置初始化为负值 -1.0（当前为 0），使 SiLU 在初始化时工作在更靠近非饱和区，改善 gate 和 value 分支之间的梯度平衡。SiLU 在负值区饱和（→0），梯度极小；将 b_gate 设为 -1.0 使 gate 输入分布中心左移，更多神经元落入非饱和区右侧。注意此方向估计影响较低，200 步训练可能难以达到 3σ 显著性。"
+  },
+  {
+    "name": "swiglu-gate-init-for-parallel",
+    "description": "c_fc1/c_fc2 初始化 std 从 0.02 提升到 0.0283"
+  },
+  {
+    "name": "swiglu-gate-variance-compensation",
+    "description": "SiLU 后乘 2.0 补偿方差压缩至 18.75%, 恢复 ~75%"
+  },
+  {
+    "name": "swiglu-init-gate-bias",
+    "description": "将 SwiGLU 门控投影偏置从 0 初始化为 +1.0，使 sigmoid 工作点从 ~0.5 移至 ~0.73 的非线性曲率最大区域。标准初始化下 pre-sigmoid 激活 std 通常 < 2，门控处于 sigmoid 线性区，SwiGLU 在 200 步中始终以接近线性方式工作。+1.0 偏置使门控进入非线性区（dsigmoid/dx ≈ 0.20），可学习梯度增大，与 exp_5（输出方差缩放）理念正交互补。置信度: 4/5"
+  },
+  {
+    "name": "swiglu-value-branch-init-compensation",
+    "description": "c_fc2 init std 0.02→0.04，补偿 SiLU 梯度屏蔽 50%"
+  },
+  {
+    "name": "warmup-extend-ratio",
+    "description": "将 warmup 步数从 10 步（5%）延长至 30 步（15%），同时降低峰值 LR 从 3e-4 至 2e-4，保持总面积合理。当前架构有 5 组可学习初始参数（tau、gates、swiglu_scale 等），warmup 不足导致这些参数在早期被小批量梯度破坏。更长的 warmup + 更低的峰值 LR 在短训练中更保守、更稳定。"
+  },
+  {
+    "name": "weight-tied-grad-rebalance",
+    "description": "lm_head 梯度缩放 1/sqrt(n_embd)≈0.0361, backward hook"
+  },
+  {
+    "name": "weight-tied-lm-head-grad-rebalance",
+    "description": "lm_head 反向梯度缩放 1/log(vocab_size)，补偿 ~196x 梯度主导"
+  },
+  {
+    "name": "wsd-schedule",
+    "description": "Replace cosine decay with Warmup-Stable-Decay schedule: 10-step warmup to 3e-4, then stable at 3e-4 for ~170 steps, then 20-step cooldown to 1e-5. For 200-step short training, cosine decays the LR immediately after warmup, wasting gradient signal during the majority of training. WSD preserves high LR for most of the run, maximizing weight-space exploration."
+  },
+  {
+    "name": "z-loss-regularization",
+    "description": "Add z-loss term: alpha * log(sum(exp(logits)))^2 to the total loss. This regularizes the logit magnitudes, preventing them from drifting to large values. Standard in PaLM and PaLM-2 architectures. Typical alpha value is 1e-4."
+  },
+  {
+    "name": "修正 embed_gain 增加 sqrt(3) 因子至 3.125",
+    "description": "当前 embed_gain=1.805（1/(sqrt(768)*0.02)），从 Uniform(-0.02,0.02) 方差 r²/3 推导应乘以 sqrt(3) 得 3.125 实现真正 L2=1.0。"
+  },
+  {
+    "name": "启用可学习残差输出门控（use_output_gate）",
+    "description": "开启已实现的 use_output_gate（gate=1+tanh(scalar)），带跨层线性偏移初始化，模拟 DeepNet scaled residual 理念。无需改 model.py，只需 train.py 加 --use-output-gate。"
+  },
+  {
+    "name": "拆分 Parallel Block 共享 LN 为独立 LN",
+    "description": "当前 ParallelTransformerBlock 中 Attention 和 MLP 共用同一个 ln_1。将 ln_1 拆分为 ln_attn 和 ln_mlp 两个独立 LayerNorm，增加约 2*n_embd 个参数，让每个分支获得独立的归一化自由度。"
+  },
+  {
+    "name": "权重绑定梯度不平衡补偿——lm_head→wte 梯度缩放",
+    "description": "权重绑定下 wte 接收 embedding(2048 tokens) 和 lm_head(50257 classes) 两路梯度，比值约 24.5x。在 backward hook 中对 lm_head 部分梯度乘以 alpha=2048/50257≈0.0408。"
+  },
+  {
+    "name": "移除 warmup 结束时梯度范数 EMA 重置",
+    "description": "移除 step==warmup_steps 时 grad_norm_ema = total_norm 的硬重置，让 EMA 从 step=0 连续平滑过渡。单行代码。"
+  },
+  {
+    "name": "移除冗余位置嵌入层 wpe（RoPE 模式下）",
+    "description": "当前 use_rope=True 时 forward 已跳过 wpe，但 wpe 仍被创建和优化。移除节省 ~786K 无用参数和约 6MB 优化器状态显存。纯清理性改动。"
+  },
+  {
+    "name": "自适应学习率缩放（muP-inspired）",
+    "description": "不同深度层梯度幅值差异可达数量级。每层参数 lr_scale=1/sqrt(layer_idx+1)，与当前自适应梯度裁剪互补。"
+  },
+  {
+    "name": "降低 embedding 权重衰减至 0.05",
+    "description": "当前 embed_wd=0.2 远高于 mlp_wd=0.05，与 lm_head 大梯度竞争抑制 embedding 学习。降低至 0.05 对齐 MLP 组。"
+  }
+]

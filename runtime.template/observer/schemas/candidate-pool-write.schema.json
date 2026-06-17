@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Candidate Pool Write",
+  "description": "约束 candidate_pool 事件的 payload",
+  "type": "object",
+  "required": ["action", "data"],
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["update", "remove"]
+    },
+    "data": {
+      "type": "object",
+      "oneOf": [
+        {
+          "title": "update",
+          "required": ["candidates"],
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "description"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "title": "remove",
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

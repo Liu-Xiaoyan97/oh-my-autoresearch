@@ -7,6 +7,7 @@ event_type → writer:
     exploration  -> writers/write_exploration.py
     knowledge    -> writers/write_knowledge.py
     state        -> writers/write_state.py
+    candidate_pool -> writers/write_candidate_pool.py
 """
 
 import json
@@ -30,6 +31,7 @@ def dispatch_one(runtime_root: str, event: dict) -> bool:
         "exploration": "write_exploration",
         "knowledge": "write_knowledge",
         "state": "write_state",
+        "candidate_pool": "write_candidate_pool",
     }
 
     module_name = writer_map.get(event_type)
