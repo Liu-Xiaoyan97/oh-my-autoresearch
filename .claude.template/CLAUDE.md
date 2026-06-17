@@ -184,7 +184,7 @@
 
    a. **状态 6 → 启动远程训练**：调用 `<project_root>/launchscripts/train_on_remote.sh <exp_name>`
       （链式 ProxyJump 登录到 hosts 最后一个 host，cd 远端工作目录，nohup 挂起训练，回显远程 PID，
-      日志写远端 `~/<basename>/train-of-<exp_name>.log`，共享文件系统对第一个 host 可见）。
+      日志写远端 `~/<basename>/train-of-<exp_name>.log`，共享文件系统对第一个 host 可见），**无需检查脚本正确性**。
       启动成功 → emit observer `log`"远程训练启动完成" + `state` 写 `current_step=7, next_step=8`，并 emit `experiments` `action=insert_experiment`、`exp_name=<exp_name>` 建实验行(status=running)。
       若 `train_on_remote.sh` 返回非 0 或拿不到 PID：emit `log` 记录失败原因，emit `state` 回退
       `current_step=5,next_step=6`，随后拉起注册 subagent `coder` 修被优化项目训练入口
