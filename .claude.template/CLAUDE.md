@@ -103,7 +103,7 @@
    - 若**为空**：scout 正常生成新的正交候选集（必须与 knowledges 中
      rejected/learned/baseline 已记载的方法均正交）。
    - scout 返回后，`validate_subagent_result.py` 自动发射 `candidate_pool update` 事件，
-     observer 将新候选集写入池文件（若 scout 已有池候选则覆盖写入去重后的完整集合）。
+     observer 将新候选集按 name 去重合并入候选池（不覆盖已有候选）。
 
    嵌套结构：
 
@@ -268,7 +268,7 @@ python3 runtime/observer/scripts/ingest/emit_event.py <event_type> '<payload_jso
   `current_step`/`next_step`/`iteration`/`exp_name`，只更新给出的字段。由
   `observer/scripts/writers/write_state.py` 落盘——**这是 team-lead 推进状态的唯一途径**）
 - `candidate_pool`（维护 `knowledges/candidate_pool.json` 候选池；
-  `action=update` 用新候选集覆盖文件，`action=remove` 从池中删除已实验的候选，
+  `action=update` 按 name 去重合并入现有池（非覆盖），`action=remove` 从池中删除已实验的候选，
   `action=clear` 清空整个池（loop-reset 使用）。
   scout 与 summarizer 返回时由 `validate_subagent_result.py` 自动发射 `update`/`remove`，
   **`clear` 需在 loop-reset 中手动发射**）

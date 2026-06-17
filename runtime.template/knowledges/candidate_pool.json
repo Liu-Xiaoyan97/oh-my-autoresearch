@@ -13,11 +13,7 @@
   },
   {
     "name": "branch-output-init-math-restoration",
-    "description": "attn c_proj std=0.0283, MLP c_proj std=0.04，系统修复 c_proj 初始化"
-  },
-  {
-    "name": "correct-embed-gain-to-theoretical-optimum",
-    "description": "将 embed_gain 从 1.805 提升至理论最优 3.125"
+    "description": "系统修复 Parallel Block 中各支路输出投影 c_proj 的初始化标准差：attn c_proj std=0.0283, MLP c_proj std=0.04。当前 attn 和 MLP 的 c_proj 初始化可能不匹配（MLP 贡献 ~16% 残差方差 vs Attention ~30%+），修正使 attn 和 MLP 分支在初始化时有相当的方差贡献比例，确保梯度信号在两条分支间均衡分布。"
   },
   {
     "name": "cosine-lr-minlr-plateau-extension",
@@ -25,7 +21,7 @@
   },
   {
     "name": "cosine-lr-plateau-short-training",
-    "description": "前150步恒定3e-4, 后50步余弦退火至1e-5, 不改变训练步数"
+    "description": "前 150 步（75%）使用恒定 LR=3e-4，后 50 步（25%）余弦退火至 1e-5。在 200 步短训练中，标准余弦调度在第 100 步 LR 已减半，有效高 LR 区间过短。本调度保留 75% 的训练在高 LR 区间最大化梯度信号，后 50 步退火促进收敛。不改变训练步数。"
   },
   {
     "name": "depth-aware-residual-exponential-scaling",
@@ -50,10 +46,6 @@
   {
     "name": "enable-separate-output-gate",
     "description": "将 ParallelTransformerBlock 的单一残差门控拆分为独立 gate_attn 和 gate_mlp"
-  },
-  {
-    "name": "final-ln-before-lm-head",
-    "description": "在 lm_head 投影之前插入一个可学习的 LayerNorm，归一化残差流终态的方差到 std=1.0。Pre-LN 架构下残差流方差随深度线性增长（Var(x_L) ≈ 1 + 2L），导致 lm_head 看到分布随深度的有偏输入。该 LN 消除方差对层数的依赖，与 exp_7 的 softplus 缩放形成互补修复——一个修正分布、一个修正幅度，预期超加性收益。置信度: 5/5"
   },
   {
     "name": "gradient-clip-ema-smooth",
@@ -112,6 +104,10 @@
     "description": "将最终归一化层 ln_f 从标准 LayerNorm 替换为 RMSNorm（移除均值中心化）。深层残差流自然去中心化，LayerNorm 的均值中心化价值有限。新增 RMSNorm 类和 CLI flag。"
   },
   {
+    "name": "ln_f-to-rmsnorm",
+    "description": "将最终归一化层 ln_f 从标准 LayerNorm（均值中心化+可学习 gain/bias）替换为 RMSNorm（仅 RMS 归一化+可学习 gain）。深层残差流每层激活自然趋向零均值（Pre-LN 保持均值稳定），ln_f 的均值中心化属于冗余计算。Llama/Mistral 等主流架构已验证此方向可行。模型代码已有 RMSNorm 类。"
+  },
+  {
     "name": "logit-grad-norm",
     "description": "对交叉熵损失关于 logits 的梯度 (p - y) 进行 L2 归一化后乘以目标范数 eta_target，保持梯度方向不变仅调幅度。模型训练后期从随机（||p-y||≈1.414）到确信（||p-y||衰减 36-93%）过程中梯度自然衰减，该归一化防止后半段梯度消失。与 exp_7（缩放 softmax 输入改变分布形状）正交——exp_7 改变梯度方向，本方案仅调梯度幅度，可叠加：z_scale=alpha*z, dL/dz=alpha*eta*(p_scale-y)/||p_scale-y||。置信度: 3/5"
   },
@@ -137,7 +133,7 @@
   },
   {
     "name": "pre-lm-head-var-norm",
-    "description": "ln_f 与 lm_head 间插入 RMSNorm，消除残差流方差波动对 logit 标度影响"
+    "description": "在 ln_f 与 lm_head 间插入 RMSNorm（无可学习参数），归一化残差流终态的方差至 RMS=1，消除残差流方差随深度线性增长对 lm_head 输入的影响。与已否决 exp_8 final-ln-before-lm-head 根本不同：exp_8 使用可学习 LN（gamma/beta 在 200 步中未收敛，SNR<0.03），此候选的 RMSNorm 不引入训练参数，避免梯度信号稀释问题。与 exp_7 的 softplus 缩放互补——一个修正分布、一个修正幅度。"
   },
   {
     "name": "pre-ln-branch-separate-norm",
@@ -169,7 +165,7 @@
   },
   {
     "name": "rope-theta-short-context",
-    "description": "RoPE base theta 从 10000 降低至 ~1000"
+    "description": "将 RoPE 位置编码的 base theta 参数从默认值 10000 降低至约 1000。RoPE 高频编码控制位置分辨率的频率间距：ω_k=θ^{-2k/d}，较大的 θ 导致较密的旋转，较小的 θ 使相邻 token 的位置分辨更加可区分。对于短序列上下文，较小的 θ 更优。单行参数修改。"
   },
   {
     "name": "separate-parallel-norm-per-branch",
@@ -189,11 +185,15 @@
   },
   {
     "name": "swiglu-gate-variance-compensation",
-    "description": "SiLU 后乘 2.0 补偿方差压缩至 18.75%, 恢复 ~75%"
+    "description": "SiLU(gate) 输出乘以 2.0 补偿 SiLU 方差压缩（SiLU 输出方差约 25%，×2 后恢复至约 75%），同时将 c_fc2 init std 从 0.02 提升至 0.04 补偿值分支方差不匹配。SwiGLU(x)=[SiLU(c_fc1(x))×2] * c_fc2_std0.04(x)，恢复乘积的单元方差。门控和值分支方差独立补偿，使乘积方差恢复至理论正确值。"
   },
   {
     "name": "swiglu-init-gate-bias",
     "description": "将 SwiGLU 门控投影偏置从 0 初始化为 +1.0，使 sigmoid 工作点从 ~0.5 移至 ~0.73 的非线性曲率最大区域。标准初始化下 pre-sigmoid 激活 std 通常 < 2，门控处于 sigmoid 线性区，SwiGLU 在 200 步中始终以接近线性方式工作。+1.0 偏置使门控进入非线性区（dsigmoid/dx ≈ 0.20），可学习梯度增大，与 exp_5（输出方差缩放）理念正交互补。置信度: 4/5"
+  },
+  {
+    "name": "swiglu-value-branch-bias-init-to-0.5",
+    "description": "将 SwiGLU 值分支 c_fc2 的偏置从 0 初始化为 +0.5。当前 c_fc2.bias=0 时，SwiGLU 乘积 gate*value 在初始化时的期望值为零（SiLU(gate) 过原点，c_fc2(x) 零均值），导致 MLP 贡献的残差信号在训练初期接近零。+0.5 偏置确保非零正激活从第一步开始，与门控分支方差补偿形成互补。"
   },
   {
     "name": "swiglu-value-branch-init-compensation",

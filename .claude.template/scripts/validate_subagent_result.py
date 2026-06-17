@@ -17,6 +17,7 @@
 """
 
 import json
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -150,9 +151,47 @@ def _build_candidate_pool_update(data: dict) -> dict | None:
     }
 
 
+def _resolve_candidate_name_from_exploration(idx: int, runtime_root: str) -> str | None:
+    """通过 exploration 表按索引解析 candidate name。"""
+    try:
+        # 读取 states.json 获取当前 exp_name
+        states_path = Path(runtime_root) / "states" / "states.json"
+        if not states_path.exists():
+            return None
+        states = json.loads(states_path.read_text(encoding="utf-8"))
+        exp_name = states.get("exp_name", "")
+        if not exp_name:
+            return None
+
+        db_path = Path(runtime_root) / "db" / "runtime.sqlite"
+        if not db_path.exists():
+            return None
+
+        conn = sqlite3.connect(str(db_path))
+        row = conn.execute(
+            'SELECT "orthogonal-direction-scout" FROM exploration WHERE exp_name = ?',
+            (exp_name,),
+        ).fetchone()
+        conn.close()
+
+        if not row or not row[0]:
+            return None
+
+        candidates = json.loads(row[0])
+        if not isinstance(candidates, list) or idx < 0 or idx >= len(candidates):
+            return None
+
+        c = candidates[idx]
+        if isinstance(c, dict):
+            return c.get("name", "")
+        return None
+    except Exception:
+        return None
+
+
 def _build_candidate_pool_remove(data: dict, runtime_root: str) -> dict | None:
     """从 summarizer 的 decision 中提取 selected_candidate 索引，
-    读取候选池文件解析为 name，构建 remove 事件 payload。"""
+    通过 exploration 表解析为 candidate name，构建 remove 事件 payload。"""
     idx = data.get("selected_candidate")
     if idx is None:
         return None
@@ -162,27 +201,30 @@ def _build_candidate_pool_remove(data: dict, runtime_root: str) -> dict | None:
         except (ValueError, TypeError):
             return None
 
-    # 读取候选池文件，按索引获取 name
-    pool_path = Path(runtime_root) / "knowledges" / "candidate_pool.json"
-    if not pool_path.exists():
+    # 优先从 exploration 表解析 name（不受候选池被覆盖影响）
+    name = _resolve_candidate_name_from_exploration(idx, runtime_root)
+
+    # 兜底：从候选池文件按索引获取 name
+    if not name:
+        pool_path = Path(runtime_root) / "knowledges" / "candidate_pool.json"
+        if pool_path.exists():
+            try:
+                pool = json.loads(pool_path.read_text(encoding="utf-8"))
+                if isinstance(pool, list) and 0 <= idx < len(pool):
+                    name = pool[idx].get("name", "")
+            except (json.JSONDecodeError, IndexError, TypeError):
+                pass
+
+    if not name:
         return None
 
-    try:
-        pool = json.loads(pool_path.read_text(encoding="utf-8"))
-        if not isinstance(pool, list) or idx < 0 or idx >= len(pool):
-            return None
-        name = pool[idx].get("name", "")
-        if not name:
-            return None
-        return {
-            "event_type": "candidate_pool",
-            "payload": {
-                "action": "remove",
-                "data": {"name": name},
-            },
-        }
-    except (json.JSONDecodeError, IndexError, TypeError):
-        return None
+    return {
+        "event_type": "candidate_pool",
+        "payload": {
+            "action": "remove",
+            "data": {"name": name},
+        },
+    }
 
 
 def _emit_one_event(event_spec: dict, runtime_root: str) -> dict:

@@ -3,11 +3,11 @@
 
 候选池是跨轮次共享的正交候选集文件，格式为 [{"name": "<方法名>", "description": "<描述>"}]。
 作用：
-  - 每轮探索生成的新候选集写入池中（update），供后续轮次直接召回。
+  - 每轮探索生成的新候选集合并入池中（update，按 name 去重追加）。
   - 某候选被票选选中实验后从池中删除（remove），避免重复实验。
 
 事件：
-  - candidate_pool update: 用 payload.data.candidates 数组覆盖池文件。
+  - candidate_pool update: 与现有池合并，新候选按 name 去重追加。
   - candidate_pool remove: 从池中删除 payload.data.name 匹配的候选。
   - candidate_pool clear: 将池文件清空为 []（loop-reset 使用）。
 """
@@ -28,16 +28,31 @@ def write(runtime_root: str, payload: dict) -> bool:
 
     try:
         if action == "update":
-            candidates = data.get("candidates", [])
-            if not isinstance(candidates, list):
+            new_candidates = data.get("candidates", [])
+            if not isinstance(new_candidates, list):
                 print("[write_candidate_pool] data.candidates 必须是数组", file=sys.stderr)
                 return False
             pool_file.parent.mkdir(parents=True, exist_ok=True)
+            # 读取现有池，按 name 去重合并
+            existing = []
+            if pool_file.exists():
+                try:
+                    existing = json.loads(pool_file.read_text(encoding="utf-8"))
+                    if not isinstance(existing, list):
+                        existing = []
+                except (json.JSONDecodeError, TypeError):
+                    existing = []
+            existing_names = {c.get("name", "") for c in existing if isinstance(c, dict)}
+            merged = list(existing)
+            for c in new_candidates:
+                if isinstance(c, dict) and c.get("name", "") not in existing_names:
+                    merged.append(c)
+                    existing_names.add(c.get("name", ""))
             # 原子写
             tmp = pool_file.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(candidates, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            tmp.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             tmp.replace(pool_file)
-            print(f"[write_candidate_pool] 写入 {len(candidates)} 个候选")
+            print(f"[write_candidate_pool] 合并后 {len(merged)} 个候选（新增 {len(merged) - len(existing)}）")
             return True
 
         elif action == "remove":
