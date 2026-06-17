@@ -13,7 +13,12 @@
     summarizer (phase=9)                  → 跳过（需 LLM 对比 baseline 后决定）
 
 用法:
+    # 从文件读取（旧方式，不推荐）
     python validate_subagent_result.py <agent_name> <phase> <json_file> [runtime_root]
+
+    # 从 stdin 读取（推荐，不写盘）
+    echo '<json>' | python validate_subagent_result.py <agent_name> <phase> - [runtime_root]
+    python validate_subagent_result.py <agent_name> <phase> - [runtime_root] <<< '<json>'
 """
 
 import json
@@ -265,9 +270,15 @@ def _auto_emit_candidate_pool(agent_name: str, phase: int, data: dict, runtime_r
         return {"emitted": False, "error": str(e)}
 
 
-def validate(agent_name: str, phase: int, json_file: str, runtime_root: str) -> dict:
-    """校验 subagent 返回的 JSON 是否符合对应 schema。"""
-    data = json.loads(Path(json_file).read_text(encoding="utf-8"))
+def validate(agent_name: str, phase: int, json_source: str, runtime_root: str) -> dict:
+    """校验 subagent 返回的 JSON 是否符合对应 schema。
+
+    json_source 为 '-' 时从 stdin 读取，否则从文件路径读取。
+    """
+    if json_source == "-":
+        data = json.load(sys.stdin)
+    else:
+        data = json.loads(Path(json_source).read_text(encoding="utf-8"))
 
     # 根据 agent 名称查找 schema 目录
     agent_schema_dir = Path(runtime_root) / "agents" / agent_name / "schemas"
@@ -326,18 +337,18 @@ def validate(agent_name: str, phase: int, json_file: str, runtime_root: str) -> 
 
 def main():
     if len(sys.argv) < 4:
-        print("用法: validate_subagent_result.py <agent_name> <phase> <json_file> [runtime_root]", file=sys.stderr)
+        print("用法: validate_subagent_result.py <agent_name> <phase> <json_source> [runtime_root]", file=sys.stderr)
         sys.exit(1)
 
     agent_name = sys.argv[1]
     phase = int(sys.argv[2])
-    json_file = sys.argv[3]
+    json_source = sys.argv[3]
     if len(sys.argv) > 4:
         runtime_root = sys.argv[4]
     else:
         runtime_root = str((Path(__file__).resolve().parent / ".." / ".." / "runtime").resolve())
 
-    result = validate(agent_name, phase, json_file, runtime_root)
+    result = validate(agent_name, phase, json_source, runtime_root)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     sys.exit(0 if result.get("valid") else 1)
 
