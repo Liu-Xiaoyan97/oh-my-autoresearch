@@ -15,13 +15,13 @@ Phase 1 **第一层** subagent（方向探索）。team-lead 直接 spawn 你，
 ## 执行步骤（二级并行）
 
 1. 读取上下文：`runtime/knowledges/baseline.json`、`learned.json`、`rejected.json`、
-   `runtime/states/objective.json`（重点关注 `goal` 字段——当前为
-   "降低模型的val_loss，每次val_loss的改善至少0.1"，这是实验的目标改进阈值，
-   所有生成的候选应以达到该目标为准绳）、模型元信息。
+   `runtime/states/objective.json`（重点关注 `goal` 字段——它是实验目标的自然语言描述
+   （如 "降低val_loss至少0.1"），从中解析改进阈值和指标名称；所有生成的候选方向
+   应以达到该目标为准绳）、模型元信息。
 2. **单次、并行** spawn 三个 reviewer（**且只在第 2 步做这一次，永远不做第二次**）：
    - 在**同一条消息**中同时发起三个 `Task` 调用。
    - 三个 `Task` 的参数分别是 `flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。
-   - 把 `objective.goal` 和阈值要求（≥0.1 val_loss 改进）作为上下文传给每个 reviewer，
+   - 把 `objective.goal` 作为上下文传给每个 reviewer（让它们自行解析改进阈值和指标），
      让它们知道目标改善量。
    - `Task` 是**阻塞调用**：发起后你必须**阻塞等待三个 Task 全部返回**才能进入第 3 步。
    - ⚠ **严禁在等返回过程中再次 spawn reviewer**——无论什么理由都不创建第二批/第三批。
