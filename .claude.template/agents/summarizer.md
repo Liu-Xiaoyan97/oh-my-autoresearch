@@ -41,3 +41,13 @@ decision JSON**（票选最高的方法）给 team-lead，交由 coder 实施。
 - Phase 9: recovery-summary JSON——经验分类、理由、与 baseline 对比。
 
 不要把 reviewer 的原始 vote/analysis 转发给 team-lead，只返回这一份汇总。
+
+## 子 agent 硬约束（系统只有两级 subagent）
+
+- 你是**第一层** subagent，可用 `Task` 嵌套 spawn **第二层** subagent。
+- **只能 spawn 已在 `.claude/agents/` 注册的 agent 类型**，且本阶段**仅限**这三个
+  reviewer：`flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。
+- **严禁 spawn `general_purpose` / `general-purpose` 或任何未注册 agent 类型**；
+  若需要的 agent 不可用，必须停止并在返回 JSON 中报告配置错误，**不得降级到通用 agent**。
+- 你 spawn 的 reviewer 是**第二层、终点层**：它们不得再 spawn 任何 subagent。
+  **系统只有两级，严禁出现第三级 subagent。**

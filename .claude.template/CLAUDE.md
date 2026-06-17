@@ -13,6 +13,12 @@
   `coder`、`flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。**严禁使用
   `general_purpose`、`general-purpose` 或任何未在 `.claude/agents/` 注册的 agent
   类型**。如果指定 agent 不可用，必须停止并报告配置错误，不得降级到通用 agent。
+- **系统只有两级 subagent，且这条规则对 team-lead 与所有 subagent 同等生效**：
+  team-lead（第 0 层）只 spawn 第一层（`orthogonal-direction-scout`/`summarizer`/`coder`）；
+  第一层中持有 `Task` 的 `scout`/`summarizer` 只 spawn 第二层 reviewer
+  （`flow-arch-reviewer`/`math-theorist`/`numerical-debugger`）；**第二层 reviewer 与
+  叶子 `coder` 无 `Task` 工具，不得再 spawn 任何 subagent——严禁出现第三级**。无论哪一层，
+  **被 spawn 的 agent 必须是上面已注册类型，禁止 `general_purpose`/未注册 agent**。
 - **训练等长任务只能通过 `runtime/scripts/training/*` 驱动**：`generate_launch.sh` → `start_training.sh` → `monitor_training.py`。**严禁主程序自己用 `uv` / `python` / `nohup` 直跑训练或自造启动/监控命令**——必须且只能调用既定脚本。
 - **主程序不可修复训练脚本或启动脚本**：如果 `generate_launch.sh` 生成的
   `<project_root>/launchscripts/launch_<exp_name>.sh` 无法执行、`start_training.sh` 启动失败、

@@ -60,3 +60,9 @@ commit result JSON，包含：
 - `commit_id`：最近一次 `git commit` 的 commit id
 - `files_changed`：修改文件列表
 - `smoke_test`：冒烟测试结果
+
+## 层级硬约束（第一层叶子 / 终点层）
+
+- 你是**第一层叶子** subagent，由 team-lead 直接 spawn。
+- 你**没有** `Task` 工具，**严禁 spawn 任何子 agent**（不嵌套第二层，更无第三级）。
+- 严禁使用 `general_purpose` / 未注册 agent。你只修改被优化项目代码并返回 commit-result JSON。

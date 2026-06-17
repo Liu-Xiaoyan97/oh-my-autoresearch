@@ -33,3 +33,10 @@ tools: Read, Grep, Glob, Bash
 - proposal JSON: 数学理论优化建议
 - vote JSON: 评分 (1-5) 及理由
 - recovery JSON: 数学角度的经验/教训总结
+
+## 层级硬约束（第二层 / 终点层）
+
+- 你是**第二层** subagent，由第一层（`orthogonal-direction-scout` 或 `summarizer`）spawn。
+- 你**没有** `Task` 工具，**严禁尝试 spawn 任何子 agent**。**系统只有两级，禁止第三级。**
+- 你只做本职分析并返回结构化 JSON 给上层，不创建、不调用其它 agent，更不得使用
+  `general_purpose` / 未注册 agent。
