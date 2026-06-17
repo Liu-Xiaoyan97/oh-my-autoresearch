@@ -3,21 +3,74 @@
 
 候选池是跨轮次共享的正交候选集文件，格式为 [{"name": "<方法名>", "description": "<描述>"}]。
 作用：
-  - 每轮探索生成的新候选集合并入池中（update，按 name 去重追加）。
+  - 每轮探索生成的新候选集合并入池中（update，语义去重 + name 去重）。
   - 某候选被票选选中实验后从池中删除（remove），避免重复实验。
+  - candidate_pool clear: 将池文件清空为 []（loop-reset 使用）。
 
 事件：
-  - candidate_pool update: 与现有池合并，新候选按 name 去重追加。
+  - candidate_pool update: 与现有池合并，新候选按 name + 语义相似度去重追加。
+    如果新候选的描述与池中某候选高度相似（但 name 不同），替换旧候选。
   - candidate_pool remove: 从池中删除 payload.data.name 匹配的候选。
   - candidate_pool clear: 将池文件清空为 []（loop-reset 使用）。
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "database"))
 from schema_spec import CANDIDATE_POOL_PATH
+
+# 语义相似度阈值（Jaccard 字符 n-gram，0~1）
+# 0.40 能覆盖 "parallel-branch-init-balance" vs "parallel-block-branch-init-balance"
+# 且不会误杀描述截然不同的候选
+SIMILARITY_THRESHOLD = 0.35
+
+
+def _tokens(text: str) -> set:
+    """将文本拆分为 token 集合（英文单词 + 中文字符 + 数字）。
+
+    英文按单词拆分，中文逐字拆分，均转为小写。
+    例如 'SwiGLU 乘积方差补偿' → {'swiglu', '乘', '积', '方', '差', '补', '偿'}
+    """
+    text = text.lower()
+    tokens = set()
+    # 英文单词/数字
+    for m in re.finditer(r"[a-z][a-z0-9_]*", text):
+        tokens.add(m.group())
+    # 中文字符逐字
+    for ch in text:
+        if '一' <= ch <= '鿿':
+            tokens.add(ch)
+    return tokens
+
+
+def _desc_similarity(desc1: str, desc2: str) -> float:
+    """计算两个候选描述的语义相似度（Jaccard token 集合）。
+
+    中英文均支持：英文按单词、中文按单字、数字按 token。
+    """
+    if not desc1 or not desc2:
+        return 0.0
+    tokens1 = _tokens(desc1)
+    tokens2 = _tokens(desc2)
+    if not tokens1 or not tokens2:
+        return 0.0
+    intersection = tokens1 & tokens2
+    union = tokens1 | tokens2
+    return len(intersection) / len(union)
+
+
+def _candidate_similarity(a: dict, b: dict) -> float:
+    """综合计算两个候选的相似度 = max(name_similarity, desc_similarity)。
+
+    候选 name 共享关键 token（如 'branch-init', 'embed-gain', 'gradient-clip'）
+    即使描述语言不同也能捕获。
+    """
+    name_sim = _desc_similarity(a.get("name", ""), b.get("name", ""))
+    desc_sim = _desc_similarity(a.get("description", ""), b.get("description", ""))
+    return max(name_sim, desc_sim)
 
 
 def write(runtime_root: str, payload: dict) -> bool:
@@ -33,7 +86,7 @@ def write(runtime_root: str, payload: dict) -> bool:
                 print("[write_candidate_pool] data.candidates 必须是数组", file=sys.stderr)
                 return False
             pool_file.parent.mkdir(parents=True, exist_ok=True)
-            # 读取现有池，按 name 去重合并
+            # 读取现有池
             existing = []
             if pool_file.exists():
                 try:
@@ -42,17 +95,63 @@ def write(runtime_root: str, payload: dict) -> bool:
                         existing = []
                 except (json.JSONDecodeError, TypeError):
                     existing = []
-            existing_names = {c.get("name", "") for c in existing if isinstance(c, dict)}
-            merged = list(existing)
+
+            # 建立 name → entry 映射和候选池
+            pool = list(existing)  # 当前候选列表
+            removed_names = []     # 被语义去重移除的候选名
+
             for c in new_candidates:
-                if isinstance(c, dict) and c.get("name", "") not in existing_names:
-                    merged.append(c)
-                    existing_names.add(c.get("name", ""))
+                if not isinstance(c, dict) or not c.get("name"):
+                    continue
+                new_name = c["name"]
+
+                # Step 1: 按 name 精确去重
+                already_by_name = any(
+                    e.get("name") == new_name for e in pool if isinstance(e, dict)
+                )
+                if already_by_name:
+                    continue
+
+                # Step 2: 按语义相似度去重 —— 检测新候选是否与池中某候选高度相似
+                duplicate_idx = None
+                for i, e in enumerate(pool):
+                    if not isinstance(e, dict) or not e.get("description"):
+                        continue
+                    sim = _candidate_similarity(c, e)
+                    if sim >= SIMILARITY_THRESHOLD:
+                        duplicate_idx = i
+                        break
+                        duplicate_idx = i
+                        break
+
+                if duplicate_idx is not None:
+                    # 用新候选替换语义重复的旧候选
+                    old_name = pool[duplicate_idx].get("name", "")
+                    removed_names.append(old_name)
+                    pool[duplicate_idx] = c
+                    sim_report = _candidate_similarity(
+                        c, pool[duplicate_idx]
+                    )
+                    print(
+                        f"[write_candidate_pool] 语义去重: '{old_name}' → '{new_name}' "
+                        f"(相似度 {sim_report:.2f})"
+                    )
+                else:
+                    pool.append(c)
+
             # 原子写
             tmp = pool_file.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            tmp.write_text(json.dumps(pool, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             tmp.replace(pool_file)
-            print(f"[write_candidate_pool] 合并后 {len(merged)} 个候选（新增 {len(merged) - len(existing)}）")
+
+            added = len(pool) - len(existing)
+            if removed_names:
+                print(
+                    f"[write_candidate_pool] 合并后 {len(pool)} 个候选 "
+                    f"（新增 {added}，替换 {len(removed_names)} 个语义重复: {', '.join(removed_names)}）"
+                )
+            else:
+                print(f"[write_candidate_pool] 合并后 {len(pool)} 个候选（新增 {added}）")
             return True
 
         elif action == "remove":
