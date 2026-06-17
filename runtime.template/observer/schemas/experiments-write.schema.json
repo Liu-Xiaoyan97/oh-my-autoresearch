@@ -36,6 +36,17 @@
         },
         "status": {
           "type": "string"
+        },
+        "eval_history": {
+          "type": "array",
+          "description": "历史验证检查点列表，每个元素含 val_step 和 val_metric",
+          "items": {
+            "type": "object",
+            "properties": {
+              "val_step": { "type": "integer" },
+              "val_metric": { "type": "number" }
+            }
+          }
         }
       }
     }

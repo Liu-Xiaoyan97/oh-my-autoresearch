@@ -48,11 +48,15 @@ def parse_lines(lines: list[str], primary_metric: str | None = None) -> dict:
     progress: dict = {}
     losses: list[float] = []
     pm = (primary_metric or "").strip()
+    eval_history: list[dict] = []
 
     for line in lines:
         if _is_eval_line(line):
+            checkpoint: dict = {}
             if m := VAL_STEP_RE.search(line):
-                progress["val_step"] = int(m.group(1) or m.group(2))
+                step = int(m.group(1) or m.group(2))
+                progress["val_step"] = step
+                checkpoint["val_step"] = step
             for key, raw in METRIC_RE.findall(line):
                 if key.lower() in ("step", "val_step", "train_step"):
                     continue
@@ -60,8 +64,15 @@ def parse_lines(lines: list[str], primary_metric: str | None = None) -> dict:
                 if value is None:
                     continue
                 progress[key] = value
+                checkpoint[key] = value
                 if pm and key == pm:
                     progress["val_metric"] = value
+                    checkpoint["val_metric"] = value
+            if checkpoint and checkpoint.get("val_step") is not None:
+                # 避免重复记录同一 step
+                last = eval_history[-1] if eval_history else None
+                if not last or last.get("val_step") != checkpoint.get("val_step"):
+                    eval_history.append(checkpoint)
         else:
             if m := TRAIN_STEP_RE.search(line):
                 progress["train_step"] = int(m.group(1))
@@ -79,6 +90,7 @@ def parse_lines(lines: list[str], primary_metric: str | None = None) -> dict:
     else:
         progress["loss_exploded"] = False
 
+    progress["eval_history"] = eval_history
     return progress
 
 

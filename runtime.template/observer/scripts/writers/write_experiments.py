@@ -60,8 +60,23 @@ def write(runtime_root: str, payload: dict) -> bool:
             conn.commit()
 
         elif action == "update_metric":
-            if "val_step" in data and "val_metric" in data:
-                col = f'{_metric_name(runtime_root)}_step_{int(data["val_step"])}'
+            metric = _metric_name(runtime_root)
+            if "eval_history" in data and isinstance(data["eval_history"], list):
+                # 批量写入 eval_history 中所有检查点
+                for ck in data["eval_history"]:
+                    vs = ck.get("val_step")
+                    vm = ck.get("val_metric")
+                    if vs is not None and vm is not None:
+                        col = f"{metric}_step_{int(vs)}"
+                        cols = {r[1] for r in conn.execute('PRAGMA table_info(experiments)')}
+                        if col not in cols:
+                            conn.execute(f'ALTER TABLE experiments ADD COLUMN "{col}" REAL DEFAULT 0')
+                        conn.execute(
+                            f'UPDATE experiments SET "{col}" = ? WHERE exp_name = ?',
+                            (vm, exp_name),
+                        )
+            elif "val_step" in data and "val_metric" in data:
+                col = f"{metric}_step_{int(data['val_step'])}"
                 cols = {r[1] for r in conn.execute('PRAGMA table_info(experiments)')}
                 if col not in cols:
                     conn.execute(f'ALTER TABLE experiments ADD COLUMN "{col}" REAL DEFAULT 0')
@@ -69,7 +84,7 @@ def write(runtime_root: str, payload: dict) -> bool:
                     f'UPDATE experiments SET "{col}" = ? WHERE exp_name = ?',
                     (data["val_metric"], exp_name),
                 )
-                conn.commit()
+            conn.commit()
 
         elif action == "mark_complete":
             conn.commit()  # 宽表无 status 列；确保行已存在即可
