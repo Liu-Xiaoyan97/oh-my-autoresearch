@@ -27,18 +27,39 @@ from schema_spec import CANDIDATE_POOL_PATH
 # 且不会误杀描述截然不同的候选
 SIMILARITY_THRESHOLD = 0.35
 
+# 英文停用词，不携带语义信号，避免 inflate 相似度
+_STOPS = frozenset({
+    'the', 'a', 'an', 'of', 'in', 'to', 'from', 'for', 'at', 'by', 'on',
+    'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did',
+    'will', 'would', 'could', 'should', 'may', 'might',
+    'this', 'that', 'these', 'those',
+    'it', 'its', 'each', 'per', 'so',
+    'and', 'or', 'but', 'not', 'no', 'nor',
+    'with', 'without', 'as', 'than', 'then', 'also',
+    'only', 'more', 'less', 'very', 'just',
+    'about', 'above', 'after', 'all', 'any', 'both',
+    'some', 'such', 'which', 'while',
+    'how', 'what', 'when', 'where', 'why',
+    'up', 'down', 'out', 'off', 'over', 'under',
+    'again', 'further', 'once', 'here', 'there',
+    'can', 'shall', 'few',
+})
+
 
 def _tokens(text: str) -> set:
     """将文本拆分为 token 集合（英文单词 + 中文字符 + 数字）。
 
-    英文按单词拆分，中文逐字拆分，均转为小写。
+    英文按单词拆分（去掉停用词），中文逐字拆分，均转为小写。
     例如 'SwiGLU 乘积方差补偿' → {'swiglu', '乘', '积', '方', '差', '补', '偿'}
     """
     text = text.lower()
     tokens = set()
     # 英文单词/数字
     for m in re.finditer(r"[a-z][a-z0-9_]*", text):
-        tokens.add(m.group())
+        tok = m.group()
+        if tok not in _STOPS:
+            tokens.add(tok)
     # 中文字符逐字
     for ch in text:
         if '一' <= ch <= '鿿':
@@ -121,23 +142,47 @@ def write(runtime_root: str, payload: dict) -> bool:
                     if sim >= SIMILARITY_THRESHOLD:
                         duplicate_idx = i
                         break
-                        duplicate_idx = i
-                        break
 
                 if duplicate_idx is not None:
                     # 用新候选替换语义重复的旧候选
                     old_name = pool[duplicate_idx].get("name", "")
                     removed_names.append(old_name)
                     pool[duplicate_idx] = c
-                    sim_report = _candidate_similarity(
-                        c, pool[duplicate_idx]
-                    )
                     print(
                         f"[write_candidate_pool] 语义去重: '{old_name}' → '{new_name}' "
-                        f"(相似度 {sim_report:.2f})"
+                        f"(相似度 {sim:.2f})"
                     )
                 else:
                     pool.append(c)
+
+            # Step 3: 池内语义去重 —— 池中候选彼此语义相似则保留描述更详细的一个
+            intra_removed = []
+            i = 0
+            while i < len(pool):
+                j = i + 1
+                recheck = False
+                while j < len(pool):
+                    sim = _candidate_similarity(pool[i], pool[j])
+                    if sim >= SIMILARITY_THRESHOLD:
+                        desc_i = len(pool[i].get("description", ""))
+                        desc_j = len(pool[j].get("description", ""))
+                        if desc_i >= desc_j:
+                            # 保留 i，移除 j
+                            removed_name = pool[j].get("name", "")
+                            intra_removed.append(removed_name)
+                            pool.pop(j)
+                            # j 自动前进到下一个
+                        else:
+                            # 保留 j，移除 i
+                            removed_name = pool[i].get("name", "")
+                            intra_removed.append(removed_name)
+                            pool.pop(i)
+                            recheck = True
+                            break  # 从新 i 开始重新检查
+                    else:
+                        j += 1
+                if not recheck:
+                    i += 1
 
             # 原子写
             tmp = pool_file.with_suffix(".json.tmp")
@@ -145,13 +190,18 @@ def write(runtime_root: str, payload: dict) -> bool:
             tmp.replace(pool_file)
 
             added = len(pool) - len(existing)
-            if removed_names:
-                print(
-                    f"[write_candidate_pool] 合并后 {len(pool)} 个候选 "
-                    f"（新增 {added}，替换 {len(removed_names)} 个语义重复: {', '.join(removed_names)}）"
+            intra_n = len(intra_removed)
+            all_removed = list(set(removed_names + intra_removed))
+            if intra_n:
+                sim_note = (
+                    f"，池内去重 {intra_n} 个: {', '.join(intra_removed)}"
                 )
             else:
-                print(f"[write_candidate_pool] 合并后 {len(pool)} 个候选（新增 {added}）")
+                sim_note = ""
+            print(
+                f"[write_candidate_pool] 合并后 {len(pool)} 个候选 "
+                f"（新增 {added}，替换 {len(removed_names)} 个语义重复{sim_note}）"
+            )
             return True
 
         elif action == "remove":
