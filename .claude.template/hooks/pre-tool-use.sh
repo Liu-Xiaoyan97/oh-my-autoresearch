@@ -123,17 +123,11 @@ if [[ "$IS_WRITE" == "true" ]] || [[ "$IS_EDIT" == "true" ]]; then
     fi
 fi
 
-# ── 守卫 8: 拦截一切创建临时/中间文件的操作（零 tmp 零中间文件）──
-# 所有 subagent 结果必须通过 Agent 返回值管道传递（stdin），严禁写入磁盘。
-# 拦截三类模式：
-# ① 写入 .claude/tmp/ 路径下的任何文件
-# ② 使用 mktemp 创建临时文件
-# ③ 写入 tmp_* / temp_* / *_result.json / *_output.json 等中间文件
-if echo "$TOOL_INPUT" | grep -qiE '(>|>>).*\.claude/tmp/' 2>/dev/null || \
-   echo "$TOOL_INPUT" | grep -qiE 'mktemp' 2>/dev/null || \
-   echo "$TOOL_INPUT" | grep -qiE '(>|>>).*(tmp_|temp_|_result\.json|_output\.json)' 2>/dev/null; then
+# ── 守卫 8: 禁止向 .claude/tmp/ 写入临时文件（/tmp 由系统管理，允许使用）──
+# 所有 subagent 结果必须通过 Agent 返回值管道传递（stdin），不得写入 .claude/ 下的中间文件。
+if echo "$TOOL_INPUT" | grep -qiE '(>|>>).*\.claude/tmp/' 2>/dev/null; then
     BLOCKED=true
-    BLOCK_REASON="检测到创建临时/中间文件的操作。严禁任何 agent 或主程序创建临时文件/中间文件。所有 subagent 结果必须通过 stdout 管道传递（stdin 传给 validate_subagent_result.py）。"
+    BLOCK_REASON="检测到向 .claude/tmp/ 写入临时文件的操作。临时文件应使用 /tmp 目录或通过 stdin 管道传递。"
 fi
 
 if [[ "$BLOCKED" == "true" ]]; then

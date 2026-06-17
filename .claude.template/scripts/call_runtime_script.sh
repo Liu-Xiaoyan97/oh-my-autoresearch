@@ -21,25 +21,32 @@ if [[ ! -x "$SCRIPT_PATH" ]]; then
     exit 1
 fi
 
-# 用 python3 subprocess 在内存中捕获 stdout/stderr，零临时文件
+# 用 mktemp 创建临时文件（/tmp 由系统自动清理）
+STDOUT_FILE="$(mktemp)"
+STDERR_FILE="$(mktemp)"
 set +e
-python3 - "$SCRIPT_PATH" "$@" <<'PY' 2>&1
-import json, subprocess, sys
+"$SCRIPT_PATH" "$@" >"$STDOUT_FILE" 2>"$STDERR_FILE"
+EXIT_CODE=$?
+set -e
 
-script_path = sys.argv[1]
-args = sys.argv[2:]
-result = subprocess.run([script_path] + args, capture_output=True, text=True, timeout=600)
+# 返回统一 tool-result JSON
+python3 - "$SCRIPT_PATH" "$EXIT_CODE" "$STDOUT_FILE" "$STDERR_FILE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+command, exit_code, stdout_file, stderr_file = sys.argv[1:5]
+stdout = Path(stdout_file).read_text(encoding="utf-8", errors="replace")
+stderr = Path(stderr_file).read_text(encoding="utf-8", errors="replace")
 payload = {
-    "command": script_path,
-    "exit_code": result.returncode,
-    "stdout": "\n".join(result.stdout.splitlines()[:100]),
-    "stderr": "\n".join(result.stderr.splitlines()[:100]),
-    "status": "success" if result.returncode == 0 else "failure",
+    "command": command,
+    "exit_code": int(exit_code),
+    "stdout": "\n".join(stdout.splitlines()[:100]),
+    "stderr": "\n".join(stderr.splitlines()[:100]),
+    "status": "success" if int(exit_code) == 0 else "failure",
     "parsed_payload": None,
 }
 print(json.dumps(payload, ensure_ascii=False, indent=2))
-sys.exit(result.returncode)
 PY
-EXIT_CODE=$?
-set -e
+rm -f "$STDOUT_FILE" "$STDERR_FILE"
 exit "$EXIT_CODE"
