@@ -17,7 +17,7 @@
    - 2: 代码修改 (coder + smoke test + git commit)
    - 3: 训练监控 (launch + start + monitor)
    - 9: 经验回收 (reviewer × 3 + summarizer + knowledge update)
-3. 更新 `next_step`，写入 `runtime/states/states.json`
+3. 通过 observer `state` 事件推进状态机（emit `state` 事件，由 observer 侧车写入 `runtime/states/states.json`）
 4. 如果 `current_step` 到达终态，通知用户
 
 ## 约束

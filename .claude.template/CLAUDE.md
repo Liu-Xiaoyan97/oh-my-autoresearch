@@ -90,6 +90,9 @@
      再调用 `runtime/scripts/validate/validate_remote.py runtime` 校验 hosts 非空且 ssh 链可达。
      校验不通过则记录 observer log 并暂停，不进入迭代。
    - 通过 observer 写入启动校验、校验通过或错误日志。
+   - Phase 0 校验通过后，emit `state` 事件推进状态：`current_step=0, next_step=1, iteration=<当前 iteration>, exp_name=<当前 exp_name>`。
+   - 载入历史经验（读取 knowledges/baseline.json、learned.json、rejected.json 构建 prompt 上下文），然后 emit `state` 事件推进：`current_step=1, next_step=2, iteration=<当前 iteration>, exp_name=<当前 exp_name>`。
+   - 然后进入 Phase 1 方向探索。
 3. 若进入 Phase 1（方向探索 → 票选 → 代码 → 同步），team-lead 创建**嵌套结构**的
    subagent，并**串行**驱动三个第一层 subagent：`orthogonal-direction-scout` →
    `summarizer` → `coder`。scout 与 summarizer 各自用 `Task` **并行**嵌套 spawn 第二层
@@ -139,7 +142,7 @@
    c. **coder 销毁 → 状态 5**：调用 `validate_subagent_result.py phase=5` 校验其 commit-result JSON
       （**该脚本自动** emit `exploration` 事件 `action=update_commit`、
       `data.commit_id=<commit id>`）。写日志"代码变更完成"；
-      states.json `current_step=5, next_step=6`。
+      emit `state` 事件 `current_step=5, next_step=6`。
       ⚠ **注意**：exploration 事件已被自动发射，**不要**再手动调 emit_event.py。
       （**remote 模式**：coder 不走 git，而是执行 `copy_to_remote.sh` 把代码覆盖到远端，
       commit_id 为 sentinel `remote-sync:<first_host>`。）
@@ -147,7 +150,7 @@
       - **remote=false（本地）**：ssh 登录跳板机、从远程仓库同步代码；写日志"代码上传成功"。
       - **remote=true**：代码已由 coder 的 `copy_to_remote.sh` 覆盖上传，无需再次同步；写日志
         "代码已同步至远端"。
-      states.json `current_step=6, next_step=7`。
+      emit `state` 事件 `current_step=6, next_step=7`。
 
    **恢复守卫**：当 `current_step ∈ {3,4,5}` 时，team-lead 检查该步对应的下一个一级
    嵌套 subagent 是否存在，不存在则补拉，保证管线跨会话/重启可续：
