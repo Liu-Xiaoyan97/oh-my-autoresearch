@@ -41,6 +41,11 @@ tools: Read, Grep, Glob, Bash, Write, Edit
   `generate_launch.sh` 生成的 launcher。
 - 如果必要改动超出上述范围，必须返回失败 JSON，说明越界原因，不能自行扩大权限。
 - 冒烟测试不得产生任何文件（包括日志），也不得修改任何文件。你只能在内存中执行测试，确认改动能跑通。
+- **🔴 严禁在 project_root 之外创建任何文件**：不得在 research-runtime 仓根目录、
+  宿主仓库的 `.claude/`、`runtime/` 或其他路径产生任何文件。
+- **🔴 严禁创建 `tmp_*` / `commit_result*` / `decision_output*` / `orthogonal_set*` / `recovery-*` 等中间文件**：
+  所有 subagent 结果必须通过 Agent 结构化 JSON 返回值返回给 team-lead，**严禁写入磁盘**。
+  这是硬性划定的红线，违规即系统错误。
 
 ## 远程模式（objective.remote=true）
 
@@ -56,7 +61,9 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 
 ## 输出（返回给 team-lead 的唯一内容）
 
-commit result JSON，包含：
+你的 commit result 必须通过 **Agent 返回值**（结构化 JSON）返回给 team-lead。
+**严禁将结果写入磁盘文件**（无论 tmp_*.json、commit_result*.json 或其他任何文件）。
+返回值应包含：
 - `commit_id`：最近一次 `git commit` 的 commit id
 - `files_changed`：修改文件列表
 - `smoke_test`：冒烟测试结果

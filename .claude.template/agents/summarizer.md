@@ -40,6 +40,9 @@ decision JSON**（票选最高的方法）给 team-lead，交由 coder 实施。
 
 ## 输出（返回给 team-lead 的唯一内容）
 
+你的 decision/recovery-summary 必须通过 **Agent 返回值**（结构化 JSON）返回给 team-lead。
+**严禁将结果写入磁盘文件**（无论 tmp_*.json、decision_output*.json、recovery-*.json
+或其他任何文件）。
 - Phase 1: decision JSON——`selected_candidate`、`total_votes`、`reason`。
 - Phase 9: recovery-summary JSON——经验分类、理由、与 baseline 对比。
 

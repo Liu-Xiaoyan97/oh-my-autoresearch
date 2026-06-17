@@ -123,6 +123,16 @@ if [[ "$IS_WRITE" == "true" ]] || [[ "$IS_EDIT" == "true" ]]; then
     fi
 fi
 
+# ── 守卫 8: 拦截通过 Bash 创建 tmp_* 中间文件（防御主模型非法写入）──
+# 所有 subagent 结果必须通过 Agent 返回值传递，严禁写入磁盘。
+# 如果主模型试图用 Bash 的 echo/cat/printf > tmp_* 创建中间文件，立即拦截。
+if echo "$TOOL_INPUT" | grep -qiE '(>|>>).*tmp_[a-zA-Z_]*\.json' 2>/dev/null || \
+   echo "$TOOL_INPUT" | grep -qiE '(>|>>).*(commit_result|decision_output|orthogonal_set_output|recovery-summary|recovery_summary)' 2>/dev/null || \
+   echo "$TOOL_INPUT" | grep -qiE 'touch.*tmp_' 2>/dev/null; then
+    BLOCKED=true
+    BLOCK_REASON="检测到创建中间/临时文件的 Bash 命令。所有 subagent 结果必须通过 Agent 返回值传递，严禁写入磁盘。这是硬性规定。"
+fi
+
 if [[ "$BLOCKED" == "true" ]]; then
     echo "[pre-tool-use] ⛔ 拦截: $BLOCK_REASON" >&2
     exit 1

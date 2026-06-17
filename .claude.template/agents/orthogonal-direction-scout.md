@@ -30,7 +30,9 @@ Phase 1 **第一层** subagent（方向探索）。team-lead 直接 spawn 你，
 
 ## 输出（返回给 team-lead 的唯一内容）
 
-正交候选集 JSON，包含：
+你的正交候选集必须通过 **Agent 返回值**（结构化 JSON）返回给 team-lead。
+**严禁将结果写入磁盘文件**（无论 tmp_*.json、orthogonal_set*.json 或其他任何文件）。
+返回值包含：
 - `candidates`：去重后的优化候选列表（来自三方 proposal 的并集去重）
 - `deduplication_reason`：去重理由
 - `orthogonal_set`：正交性验证结果
