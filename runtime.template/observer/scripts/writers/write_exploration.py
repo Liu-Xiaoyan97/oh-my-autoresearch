@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "database"))
-from schema_spec import exploration_ddl  # noqa: E402
+from schema_spec import exploration_ddl, states_exp_name  # noqa: E402
 
 
 def _get_db_path(runtime_root: str) -> str:
@@ -33,7 +33,8 @@ def _ensure_table(conn: sqlite3.Connection):
 
 def write(runtime_root: str, payload: dict) -> bool:
     action = payload.get("action", "")
-    exp_name = payload.get("exp_name", "")
+    # exp_name 权威来源是 states.json，不依赖主程序在 payload 里给
+    exp_name = states_exp_name(runtime_root) or payload.get("exp_name", "")
     data = payload.get("data", {})
 
     conn = sqlite3.connect(_get_db_path(runtime_root))

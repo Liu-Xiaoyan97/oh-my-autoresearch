@@ -241,6 +241,11 @@ python3 runtime/observer/scripts/ingest/emit_event.py <event_type> '<payload_jso
 
 payload 必须符合 `runtime/observer/schemas/*.schema.json`。
 
+**`experiments` / `exploration` 事件的 `exp_name` 由 writer 权威地从 `states.json` 读取**
+（`schema_spec.states_exp_name`），**不依赖主程序在 payload 里给定**——即使 payload 省略
+`exp_name`，observer 也会落到 `states.json.exp_name` 对应的当前实验行；payload 仅作 states.json
+读不到时的兜底。`clear_all` 无需 `exp_name`。
+
 ## Subagent 返回（嵌套结构）
 
 调用层级（两级）：
