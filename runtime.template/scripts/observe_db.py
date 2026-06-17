@@ -67,7 +67,7 @@ def fetch_tables():
 
 
 def make_table(title, cols, rows, scout_col_idx=None):
-    t = Table(title=title, box=box.ROUNDED, header_style="bold cyan")
+    t = Table(title=title, box=box.ROUNDED, header_style="bold cyan", show_lines=True)
     for c in cols:
         t.add_column(c)
     if not rows:
@@ -103,9 +103,9 @@ def build_layout():
     layout = Layout()
     layout.split_column(
         Layout(Panel(make_table("📊 experiments", exp_cols, exp_rows),
-                     border_style="green")),
+                     border_style="green"), ratio=3),
         Layout(Panel(make_table("🔍 exploration", expl_cols, expl_rows, scout_col_idx=scout_idx),
-                     border_style="yellow")),
+                     border_style="yellow"), ratio=7),
         Layout(Panel(f"⏱ Last refresh: {datetime.now():%H:%M:%S}  |  "
                      f"experiments: {len(exp_rows)} rows  |  "
                      f"exploration: {len(expl_rows)} rows  |  "
