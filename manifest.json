@@ -147,6 +147,8 @@
       "scripts/utils/jsonl.py",
       "scripts/utils/path_resolve.py",
       "scripts/utils/ssh_chain.py",
+      "scripts/utils/resolve_goal.sh",
+      "scripts/utils/resolve_poll_interval.sh",
       "scripts/observe_db.py"
     ]
   },
@@ -165,5 +167,5 @@
     "start": ".claude.template/hooks/session-start.sh",
     "stop": ".claude.template/hooks/stop.sh"
   },
-  "compatible_runtime_version": "0.1.0"
+  "compatible_runtime_version": "0.1.4"
 }
