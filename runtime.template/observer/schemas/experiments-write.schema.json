@@ -3,21 +3,40 @@
   "title": "Experiments Write Schema",
   "description": "约束写入 experiments 表的事件 payload",
   "type": "object",
-  "required": ["action", "exp_name"],
+  "required": [
+    "action"
+  ],
   "properties": {
     "action": {
       "type": "string",
-      "enum": ["insert_experiment", "update_metric", "mark_complete"]
+      "enum": [
+        "insert_experiment",
+        "update_metric",
+        "mark_complete",
+        "clear_all"
+      ]
     },
-    "exp_name": { "type": "string" },
+    "exp_name": {
+      "type": "string"
+    },
     "data": {
       "type": "object",
       "properties": {
-        "train_step": { "type": "integer" },
-        "train_loss": { "type": "number" },
-        "val_step": { "type": "integer" },
-        "val_metric": { "type": "number" },
-        "status": { "type": "string" }
+        "train_step": {
+          "type": "integer"
+        },
+        "train_loss": {
+          "type": "number"
+        },
+        "val_step": {
+          "type": "integer"
+        },
+        "val_metric": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string"
+        }
       }
     }
   }

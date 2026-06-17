@@ -16,7 +16,7 @@ def validate(event: dict) -> dict:
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
 
     if jsonschema is None:
-        required = ["action", "exp_name"]
+        required = ["action"]  # exp_name 对 clear_all 可选
         missing = [f for f in required if f not in event]
         return {"valid": len(missing) == 0, "missing_fields": missing}
 

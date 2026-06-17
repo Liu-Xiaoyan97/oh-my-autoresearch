@@ -1,18 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Experiment Row Schema",
-  "description": "约束 experiments 表单行数据结构",
+  "description": "约束 experiments 表单行数据结构（宽表）：exp_name(PK) + 每个 eval 检查点的主指标列 <{primary_metrics.name}_step_{(i+1)*eval_n_steps}>(REAL)。列名按 objective 动态生成。",
   "type": "object",
   "required": ["exp_name"],
   "properties": {
-    "exp_name": { "type": "string" },
-    "train_step": { "type": "integer" },
-    "train_loss": { "type": "number" },
-    "val_step": { "type": "integer" },
-    "val_metric": { "type": "number" },
-    "status": { "type": "string", "enum": ["running", "completed", "failed", "killed"] },
-    "pid": { "type": ["integer", "null"] },
-    "created_at": { "type": "string" },
-    "updated_at": { "type": "string" }
-  }
+    "exp_name": { "type": "string" }
+  },
+  "patternProperties": {
+    "^.+_step_[0-9]+$": { "type": ["number", "null"] }
+  },
+  "additionalProperties": false
 }

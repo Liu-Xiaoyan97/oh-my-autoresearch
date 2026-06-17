@@ -1,98 +1,77 @@
 #!/usr/bin/env python3
-"""write_experiments.py - 写入 experiments 表。
+"""write_experiments.py - 写入 experiments 表（宽表 schema）。
 
-可通过 runtime/scripts/database/* helper 调用，但外部入口必须是 observer event。
+schema 由 objective 推导：exp_name(PK) + <{metric}_step_{(i+1)*eval}> 各列(REAL 默认 0)。
+- insert_experiment: 建/占位当前实验行。
+- update_metric: data 含 val_step + val_metric 时，写入列 <{metric}_step_{val_step}>。
+- mark_complete: 宽表无 status 列，仅确保行存在（完成状态由 states.json 跟踪）。
+- clear_all: 清空全表（供 /loop-reset）。
 """
 
-import json
 import sqlite3
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "database"))
+from schema_spec import load_objective, experiments_ddl, metric_step_columns  # noqa: E402
 
 
 def _get_db_path(runtime_root: str) -> str:
     return str(Path(runtime_root) / "db" / "runtime.sqlite")
 
 
-def _ensure_table(conn: sqlite3.Connection) -> None:
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS experiments (
-            exp_name TEXT PRIMARY KEY,
-            train_step INTEGER DEFAULT 0,
-            train_loss REAL DEFAULT 0.0,
-            val_step INTEGER DEFAULT 0,
-            val_metric REAL DEFAULT 0.0,
-            status TEXT DEFAULT 'running',
-            pid INTEGER,
-            created_at TEXT,
-            updated_at TEXT
-        )
-    """)
-    conn.commit()
+def _ensure_table(conn: sqlite3.Connection, runtime_root: str):
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='experiments'"
+    ).fetchone()
+    if not exists:
+        conn.execute(experiments_ddl(load_objective(runtime_root)))
+        conn.commit()
 
 
-def _ensure_step_column(conn: sqlite3.Connection, step: int) -> str:
-    col = f"step_{step}"
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(experiments)")}
-    if col not in columns:
-        conn.execute(f"ALTER TABLE experiments ADD COLUMN {col} REAL")
-    return col
+def _metric_name(runtime_root: str) -> str:
+    return load_objective(runtime_root)["primary_metrics"]["name"]
 
 
 def write(runtime_root: str, payload: dict) -> bool:
-    """根据 action 写入 experiments 表。"""
     action = payload.get("action", "")
     exp_name = payload.get("exp_name", "")
     data = payload.get("data", {})
 
-    db_path = _get_db_path(runtime_root)
-    conn = sqlite3.connect(db_path)
-    _ensure_table(conn)
-
-    now = datetime.now(timezone.utc).isoformat()
-
+    conn = sqlite3.connect(_get_db_path(runtime_root))
     try:
+        _ensure_table(conn, runtime_root)
+
+        if action == "clear_all":
+            conn.execute("DELETE FROM experiments")
+            conn.commit()
+            return True
+
         if not exp_name:
             print("[write_experiments] exp_name 不能为空", file=sys.stderr)
             return False
 
         conn.execute(
-            "INSERT OR IGNORE INTO experiments (exp_name, created_at, updated_at) VALUES (?, ?, ?)",
-            (exp_name, now, now),
+            "INSERT OR IGNORE INTO experiments (exp_name) VALUES (?)", (exp_name,)
         )
 
         if action == "insert_experiment":
-            conn.execute("UPDATE experiments SET updated_at = ? WHERE exp_name = ?", (now, exp_name))
             conn.commit()
 
         elif action == "update_metric":
-            fields = []
-            values = []
-            for key in ["train_step", "train_loss", "val_step", "val_metric", "status"]:
-                if key in data:
-                    fields.append(f"{key} = ?")
-                    values.append(data[key])
             if "val_step" in data and "val_metric" in data:
-                step_col = _ensure_step_column(conn, int(data["val_step"]))
-                fields.append(f"{step_col} = ?")
-                values.append(data["val_metric"])
-            if fields:
-                fields.append("updated_at = ?")
-                values.append(now)
-                values.append(exp_name)
+                col = f'{_metric_name(runtime_root)}_step_{int(data["val_step"])}'
+                cols = {r[1] for r in conn.execute('PRAGMA table_info(experiments)')}
+                if col not in cols:
+                    conn.execute(f'ALTER TABLE experiments ADD COLUMN "{col}" REAL DEFAULT 0')
                 conn.execute(
-                    f"UPDATE experiments SET {', '.join(fields)} WHERE exp_name = ?",
-                    values,
+                    f'UPDATE experiments SET "{col}" = ? WHERE exp_name = ?',
+                    (data["val_metric"], exp_name),
                 )
                 conn.commit()
 
         elif action == "mark_complete":
-            conn.execute(
-                "UPDATE experiments SET status = ?, updated_at = ? WHERE exp_name = ?",
-                ("completed", now, exp_name),
-            )
-            conn.commit()
+            conn.commit()  # 宽表无 status 列；确保行已存在即可
 
         else:
             print(f"[write_experiments] 未知 action: {action}", file=sys.stderr)
@@ -108,7 +87,7 @@ def write(runtime_root: str, payload: dict) -> bool:
 
 
 if __name__ == "__main__":
-    import sys
+    import json
     runtime_root = sys.argv[1] if len(sys.argv) > 1 else "runtime"
     payload = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
     write(runtime_root, payload)

@@ -1,77 +1,82 @@
 #!/usr/bin/env python3
-"""write_exploration.py - 写入 exploration 表。"""
+"""write_exploration.py - 写入 exploration 表（4 列：exp_name + 三 TEXT 列）。
+
+列：exp_name(PK), "orthogonal-direction-scout", "decision", "commit" 均 TEXT。
+- update_orthogonal_candidates → 写 orthogonal-direction-scout
+- update_decision               → 写 decision
+- update_commit                 → 写 commit
+- insert_exploration            → 占位行
+- clear_all                     → 清空全表（供 /loop-reset）
+"""
 
 import json
 import sqlite3
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "database"))
+from schema_spec import exploration_ddl  # noqa: E402
 
 
 def _get_db_path(runtime_root: str) -> str:
     return str(Path(runtime_root) / "db" / "runtime.sqlite")
 
 
-def _ensure_table(conn: sqlite3.Connection) -> None:
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS exploration (
-            exp_name TEXT PRIMARY KEY,
-            orthogonal_direction_scout TEXT,
-            decision TEXT,
-            commit_id TEXT,
-            created_at TEXT,
-            updated_at TEXT
-        )
-    """)
-    conn.commit()
+def _ensure_table(conn: sqlite3.Connection):
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='exploration'"
+    ).fetchone()
+    if not exists:
+        conn.execute(exploration_ddl())
+        conn.commit()
 
 
 def write(runtime_root: str, payload: dict) -> bool:
-    """根据 action 写入 exploration 表。"""
     action = payload.get("action", "")
     exp_name = payload.get("exp_name", "")
     data = payload.get("data", {})
 
-    db_path = _get_db_path(runtime_root)
-    conn = sqlite3.connect(db_path)
-    _ensure_table(conn)
-
-    now = datetime.now(timezone.utc).isoformat()
-
+    conn = sqlite3.connect(_get_db_path(runtime_root))
     try:
+        _ensure_table(conn)
+
+        if action == "clear_all":
+            conn.execute("DELETE FROM exploration")
+            conn.commit()
+            return True
+
         if not exp_name:
             print("[write_exploration] exp_name 不能为空", file=sys.stderr)
             return False
 
         conn.execute(
-            "INSERT OR IGNORE INTO exploration (exp_name, created_at, updated_at) VALUES (?, ?, ?)",
-            (exp_name, now, now),
+            "INSERT OR IGNORE INTO exploration (exp_name) VALUES (?)", (exp_name,)
         )
 
         if action == "insert_exploration":
-            conn.execute("UPDATE exploration SET updated_at = ? WHERE exp_name = ?", (now, exp_name))
             conn.commit()
 
         elif action == "update_orthogonal_candidates":
             value = data.get("orthogonal_direction_scout", data)
             conn.execute(
-                "UPDATE exploration SET orthogonal_direction_scout = ?, updated_at = ? WHERE exp_name = ?",
-                (json.dumps(value, ensure_ascii=False), now, exp_name),
+                'UPDATE exploration SET "orthogonal-direction-scout" = ? WHERE exp_name = ?',
+                (json.dumps(value, ensure_ascii=False), exp_name),
             )
             conn.commit()
 
         elif action == "update_decision":
             value = data.get("decision", data)
             conn.execute(
-                "UPDATE exploration SET decision = ?, updated_at = ? WHERE exp_name = ?",
-                (json.dumps(value, ensure_ascii=False), now, exp_name),
+                'UPDATE exploration SET "decision" = ? WHERE exp_name = ?',
+                (json.dumps(value, ensure_ascii=False), exp_name),
             )
             conn.commit()
 
         elif action == "update_commit":
+            value = data.get("commit_id", data.get("commit", ""))
             conn.execute(
-                "UPDATE exploration SET commit_id = ?, updated_at = ? WHERE exp_name = ?",
-                (data.get("commit_id", ""), now, exp_name),
+                'UPDATE exploration SET "commit" = ? WHERE exp_name = ?',
+                (value, exp_name),
             )
             conn.commit()
 
@@ -89,7 +94,6 @@ def write(runtime_root: str, payload: dict) -> bool:
 
 
 if __name__ == "__main__":
-    import sys
     runtime_root = sys.argv[1] if len(sys.argv) > 1 else "runtime"
     payload = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
     write(runtime_root, payload)

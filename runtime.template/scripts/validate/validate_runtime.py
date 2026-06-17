@@ -22,6 +22,7 @@ def main():
         ("objective", "validate_objective.py"),
         ("baseline", "validate_baseline.py"),
         ("remote", "validate_remote.py"),
+        ("db_schema", "validate_db_schema.py"),
     ]
 
     for name, script in validators:

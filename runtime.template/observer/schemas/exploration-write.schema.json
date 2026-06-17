@@ -3,19 +3,44 @@
   "title": "Exploration Write Schema",
   "description": "约束写入 exploration 表的事件 payload",
   "type": "object",
-  "required": ["action", "exp_name"],
+  "required": [
+    "action"
+  ],
   "properties": {
     "action": {
       "type": "string",
-      "enum": ["insert_exploration", "update_orthogonal_candidates", "update_decision", "update_commit"]
+      "enum": [
+        "insert_exploration",
+        "update_orthogonal_candidates",
+        "update_decision",
+        "update_commit",
+        "clear_all"
+      ]
     },
-    "exp_name": { "type": "string" },
+    "exp_name": {
+      "type": "string"
+    },
     "data": {
       "type": "object",
       "properties": {
-        "orthogonal_direction_scout": { "type": ["object", "null"] },
-        "decision": { "type": ["object", "null"] },
-        "commit_id": { "type": ["string", "null"] }
+        "orthogonal_direction_scout": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "decision": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "commit_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
       }
     }
   }

@@ -52,6 +52,14 @@
    - 调用 `runtime/scripts/validate/validate_runtime.py runtime`。
    - **不检查 `project_root` 的 git 仓库**：project 由其自身独立仓库管理、coder 每轮提交，
      Phase 0 无需校验其干净度（不调用 `check_clean.sh <project_root>`）。
+   - **数据表 schema 校验（`validate_runtime.py` 已内置 `validate_db_schema.py`）**：依据
+     `objective`（`primary_metrics.name`/`num_training_steps`/`eval_n_steps`）推导 schema —
+     `experiments` 共 `1 + num_training_steps // eval_n_steps` 列：`exp_name`(PK) 与各
+     `<{primary_metrics.name}_step_{(i+1)*eval_n_steps}>`(REAL)；`exploration` 共 4 列：
+     `exp_name`(PK) 与 `orthogonal-direction-scout`/`decision`/`commit`(TEXT)。表不存在则建；
+     存在则校验列集合（空表 schema 不符自动重建，非空不符则不通过）。**数据完整性**：
+     `experiments` 非空但某行指标全为 0 → 不通过；`experiments` 记录数必须 == `exploration`
+     或 == `exploration`-1，否则不通过。校验不通过则记 observer log 并暂停，不进入迭代。
    - **若 `objective.remote` 为 true（首轮迭代开始前自动执行一次，幂等可重复）**：
      调用 `runtime/scripts/training/generate_remote.sh runtime` 生成
      `<project_root>/launchscripts/{copy_to_remote,train_on_remote,query_from_remote}.sh`；
