@@ -35,11 +35,12 @@ python3 runtime/observer/scripts/ingest/emit_event.py state \
   '{"current_step":0,"next_step":1,"iteration":0,"exp_name":"exp_0"}' runtime
 ```
 
-### 3. 通过 observer 事件清空 experiments、exploration 两表
+### 3. 通过 observer 事件清空 experiments、exploration 两表及候选池
 
 ```bash
 python3 runtime/observer/scripts/ingest/emit_event.py experiments '{"action":"clear_all"}' runtime
 python3 runtime/observer/scripts/ingest/emit_event.py exploration '{"action":"clear_all"}' runtime
+python3 runtime/observer/scripts/ingest/emit_event.py candidate_pool '{"action":"clear"}' runtime
 ```
 
 ### 4. 记录重置日志
@@ -52,7 +53,7 @@ python3 runtime/observer/scripts/ingest/emit_event.py log \
 ### 5. 等待 observer 消费以上事件（CronCreate 2分钟后检查，而非 sleep 阻塞）
 
 ```bash
-# 观察 offset 是否增长到 4（state + experiments + exploration + log 共 4 个事件）
+# 观察 offset 是否增长到 5（state + experiments + exploration + candidate_pool + log 共 5 个事件）
 # 使用 CronCreate 定时检查，非 sleep 阻塞
 ```
 

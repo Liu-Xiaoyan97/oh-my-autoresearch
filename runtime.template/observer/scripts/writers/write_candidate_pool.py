@@ -9,6 +9,7 @@
 事件：
   - candidate_pool update: 用 payload.data.candidates 数组覆盖池文件。
   - candidate_pool remove: 从池中删除 payload.data.name 匹配的候选。
+  - candidate_pool clear: 将池文件清空为 []（loop-reset 使用）。
 """
 
 import json
@@ -63,6 +64,14 @@ def write(runtime_root: str, payload: dict) -> bool:
             tmp.replace(pool_file)
 
             print(f"[write_candidate_pool] 删除 '{name_to_remove}'，移除 {removed} 个候选，剩余 {len(pool)}")
+            return True
+
+        elif action == "clear":
+            pool_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp = pool_file.with_suffix(".json.tmp")
+            tmp.write_text("[]\n", encoding="utf-8")
+            tmp.replace(pool_file)
+            print("[write_candidate_pool] 清空候选池")
             return True
 
         else:

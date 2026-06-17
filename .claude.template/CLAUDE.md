@@ -268,9 +268,10 @@ python3 runtime/observer/scripts/ingest/emit_event.py <event_type> '<payload_jso
   `current_step`/`next_step`/`iteration`/`exp_name`，只更新给出的字段。由
   `observer/scripts/writers/write_state.py` 落盘——**这是 team-lead 推进状态的唯一途径**）
 - `candidate_pool`（维护 `knowledges/candidate_pool.json` 候选池；
-  `action=update` 用新候选集覆盖文件，`action=remove` 从池中删除已实验的候选。
-  scout 与 summarizer 返回时由 `validate_subagent_result.py` 自动发射，
-  **你无需手动发射此事件**）
+  `action=update` 用新候选集覆盖文件，`action=remove` 从池中删除已实验的候选，
+  `action=clear` 清空整个池（loop-reset 使用）。
+  scout 与 summarizer 返回时由 `validate_subagent_result.py` 自动发射 `update`/`remove`，
+  **`clear` 需在 loop-reset 中手动发射**）
 
 payload 必须符合 `runtime/observer/schemas/*.schema.json`。
 
