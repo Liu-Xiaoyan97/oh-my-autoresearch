@@ -241,10 +241,21 @@ python3 runtime/observer/scripts/ingest/emit_event.py <event_type> '<payload_jso
 
 payload 必须符合 `runtime/observer/schemas/*.schema.json`。
 
-**`experiments` / `exploration` 事件的 `exp_name` 由 writer 权威地从 `states.json` 读取**
-（`schema_spec.states_exp_name`），**不依赖主程序在 payload 里给定**——即使 payload 省略
-`exp_name`，observer 也会落到 `states.json.exp_name` 对应的当前实验行；payload 仅作 states.json
-读不到时的兜底。`clear_all` 无需 `exp_name`。
+**写入参数一律"文件优先"：凡有权威文件来源的上下文参数，writer 一律从文件读取，payload 只作兜底**，
+team-lead 无需（也不应依赖）在 payload 里给定它们：
+
+- `exp_name`：所有 writer（`experiments`/`exploration`/`knowledge`/`log`）统一从
+  `states.json.exp_name` 读取（`schema_spec.states_exp_name`）。即使 payload 省略或给错，
+  observer 也会落到当前实验；`clear_all` 无需 `exp_name`。
+- `knowledge` 条目的 `data.exp_name` 由 writer 注入为 `states.json.exp_name`（`method_summary`/
+  `reason` 等真内容仍来自 payload）。
+- experiments 的指标列名由 writer 从 `objective.json`（`primary_metrics.name`/`eval_n_steps`）推导。
+
+**唯一例外是 `state` 事件**：它是 `states.json` 的写入者本身，payload 即 team-lead 决定的状态
+转移信号（`current_step`/`next_step`/`iteration`/`exp_name`），无文件可读，必须由 payload 给定。
+
+真正的"数据本体"（log 文本、指标值、候选集/决策内容、knowledge 的 method_summary/reason）没有
+文件来源，仍来自 payload。
 
 ## Subagent 返回（嵌套结构）
 

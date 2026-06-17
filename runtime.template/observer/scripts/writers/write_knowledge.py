@@ -10,7 +10,9 @@ from pathlib import Path
 
 SCRIPTS_ROOT = Path(__file__).resolve().parents[3] / "scripts"
 sys.path.insert(0, str(SCRIPTS_ROOT / "utils"))
+sys.path.insert(0, str(SCRIPTS_ROOT / "database"))
 from atomic_write import atomic_write
+from schema_spec import states_exp_name
 
 
 def write(runtime_root: str, payload: dict) -> bool:
@@ -23,6 +25,11 @@ def write(runtime_root: str, payload: dict) -> bool:
     }.get(action, "")
     target_file = payload.get("target_file") or default_target
     data = payload.get("data", {})
+    # exp_name 文件优先：knowledge 条目恒指向当前实验，从 states.json 权威获取
+    if isinstance(data, dict):
+        resolved = states_exp_name(runtime_root) or data.get("exp_name", "")
+        if resolved:
+            data = {**data, "exp_name": resolved}
 
     knowledge_dir = Path(runtime_root) / "knowledges"
     knowledge_dir.mkdir(parents=True, exist_ok=True)

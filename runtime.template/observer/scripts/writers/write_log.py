@@ -10,11 +10,7 @@ from pathlib import Path
 
 
 def _resolve_exp_name(runtime_root: str, payload: dict) -> str:
-    """优先用 payload 的真实 exp_name；缺失或为 default 时回退到当前 states.json。"""
-    exp_name = str(payload.get("exp_name") or "").strip()
-    if exp_name and exp_name != "default":
-        return exp_name
-
+    """文件优先：先取 states.json 的 exp_name(权威来源)，缺失才回退 payload，再回退 default。"""
     states_path = Path(runtime_root) / "states" / "states.json"
     try:
         state = json.loads(states_path.read_text(encoding="utf-8"))
@@ -23,6 +19,10 @@ def _resolve_exp_name(runtime_root: str, payload: dict) -> str:
             return current
     except Exception:
         pass
+
+    exp_name = str(payload.get("exp_name") or "").strip()
+    if exp_name and exp_name != "default":
+        return exp_name
 
     return "default"
 
