@@ -80,16 +80,6 @@ echo ""
 echo "→ 设置 hook 执行权限 ..."
 find "$CLAUDE_DST/hooks" -name "*.sh" -exec chmod +x {} + 2>/dev/null || true
 
-# 4. 复制 pyproject.toml → 宿主根（保持 no-clobber，不覆盖宿主已有的）
-echo ""
-echo "→ 安装 pyproject.toml 到 $HOST_ROOT ..."
-if [[ -e "$HOST_ROOT/pyproject.toml" ]]; then
-    echo "  跳过 (已存在): pyproject.toml"
-else
-    cp "$SCRIPT_DIR/pyproject.toml" "$HOST_ROOT/pyproject.toml"
-    echo "  安装: pyproject.toml"
-fi
-
 # 5. 设置脚本执行权限
 echo ""
 echo "→ 设置脚本执行权限 ..."
