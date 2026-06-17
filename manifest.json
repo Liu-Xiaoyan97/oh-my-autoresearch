@@ -118,6 +118,7 @@
       "scripts/validate/validate_db_schema.py",
       "scripts/database/init_db.py",
       "scripts/database/schema_spec.py",
+      "scripts/database/query_tables.py",
       "scripts/database/ensure_experiment_row.py",
       "scripts/database/update_experiment_metric.py",
       "scripts/database/ensure_exploration_row.py",
