@@ -123,11 +123,18 @@ if [[ "$IS_WRITE" == "true" ]] || [[ "$IS_EDIT" == "true" ]]; then
     fi
 fi
 
-# ── 守卫 8: 禁止向 .claude/tmp/ 写入临时文件（/tmp 由系统管理，允许使用）──
-# 所有 subagent 结果必须通过 Agent 返回值管道传递（stdin），不得写入 .claude/ 下的中间文件。
-if echo "$TOOL_INPUT" | grep -qiE '(>|>>).*\.claude/tmp/' 2>/dev/null; then
-    BLOCKED=true
-    BLOCK_REASON="检测到向 .claude/tmp/ 写入临时文件的操作。临时文件应使用 /tmp 目录或通过 stdin 管道传递。"
+# ── 守卫 8: 禁止在仓库目录内通过 Bash 创建任何文件（只允许 /tmp）──
+# 规约：任何 agent 不得在当前仓库目录的任意位置创建文件。
+# 临时文件统一使用 /tmp 目录（系统自动清理）。
+# agent 间数据传递一律通过 stdout/stdin 管道，不得落盘。
+# 注意：coder 对 project/ 下代码的 Write/Edit 由守卫 7 判定，不在此拦截。
+if echo "$TOOL_INPUT" | grep -qiE '(>|>>|tee )' 2>/dev/null && \
+   ! echo "$TOOL_INPUT" | grep -qiE '/tmp/' 2>/dev/null; then
+    # 排除安全的 npm/uv 下载等无害模式
+    if ! echo "$TOOL_INPUT" | grep -qiE '(npm install|pip install|uv sync)' 2>/dev/null; then
+        BLOCKED=true
+        BLOCK_REASON="检测到在仓库目录内创建文件的操作。禁止任何 agent 在当前仓库目录下创建文件（包括临时文件、中间文件、日志文件）。临时文件统一使用 /tmp 目录。"
+    fi
 fi
 
 if [[ "$BLOCKED" == "true" ]]; then

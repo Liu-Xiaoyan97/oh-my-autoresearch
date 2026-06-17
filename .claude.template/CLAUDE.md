@@ -34,6 +34,7 @@
   （`flow-arch-reviewer`/`math-theorist`/`numerical-debugger`）；**第二层 reviewer 与
   叶子 `coder` 无 `Task` 工具，不得再 spawn 任何 subagent——严禁出现第三级**。无论哪一层，
   **被 spawn 的 agent 必须是上面已注册类型，禁止 `general_purpose`/未注册 agent**。
+- **零中间文件规约**：任何 agent 不得在当前仓库目录的任意位置创建文件（包括临时文件、中间文件、结果 JSON 等）。agent 间数据传递一律通过 stdout/stderr 管道（stdin）完成。**如果必须创建临时文件，统一使用 `/tmp` 目录**（由操作系统自动清理）。coder 对 `project/` 下被优化项目代码的修改是管线最终输出，不属于中间文件，由预提交守卫 7 判别。
 - **训练等长任务只能通过 `runtime/scripts/training/*` 驱动**：`generate_launch.sh` → `start_training.sh` → `monitor_training.py`。**严禁主程序自己用 `uv` / `python` / `nohup` 直跑训练或自造启动/监控命令**——必须且只能调用既定脚本。
 - **主程序不可修复训练脚本或启动脚本**：如果 `generate_launch.sh` 生成的
   `<project_root>/launchscripts/launch_<exp_name>.sh` 无法执行、`start_training.sh` 启动失败、
