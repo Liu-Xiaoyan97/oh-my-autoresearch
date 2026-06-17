@@ -68,6 +68,7 @@
       "observer/scripts/lifecycle/start_observer.sh",
       "observer/scripts/lifecycle/stop_observer.sh",
       "observer/scripts/lifecycle/restart_observer.sh",
+      "observer/scripts/lifecycle/reset_observer.sh",
       "observer/scripts/lifecycle/healthcheck.sh",
       "observer/scripts/ingest/emit_event.py",
       "observer/scripts/ingest/append_event.py",
