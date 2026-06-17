@@ -21,13 +21,18 @@ TRAIN_STEP_RE = re.compile(r"(?:^|[\s,])(?:train_)?step\s*[=:]?\s*(\d+)", re.IGN
 TRAIN_LOSS_RE = re.compile(
     r"(?:^|[\s,])(?:train_)?loss\s*[=:]?\s*([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)", re.IGNORECASE
 )
-# 验证行步号：val_step=N 或 "Eval at step N"
-VAL_STEP_RE = re.compile(r"(?:val_step\s*[=:]\s*(\d+))|(?:eval\s+at\s+step\s+(\d+))", re.IGNORECASE)
-# 通用 key=value（仅用于验证行提取命名指标，如 val_loss=1.2345）
-METRIC_RE = re.compile(
-    r"(?:^|[\s,])([A-Za-z_][A-Za-z0-9_.\-]*)\s*[=:]\s*([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)",
-    re.IGNORECASE,
-)
+# 验证行：强制格式 "Eval at step {step}: {primary_metrics.name}={value}"
+# 一步捕获步号和指标值，不再拆分两个正则。
+def _build_eval_re(primary_metric: str | None):
+    """根据 primary_metrics.name 构建 eval 正则。name 为空返回 None。"""
+    if not primary_metric:
+        return None
+    return re.compile(
+        r"Eval\s+at\s+step\s+(\d+):\s*"
+        + re.escape(primary_metric)
+        + r"\s*[=:]\s*([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)",
+        re.IGNORECASE,
+    )
 
 
 def _float(value: str) -> float | None:
@@ -40,39 +45,18 @@ def _float(value: str) -> float | None:
     return parsed
 
 
-def _is_eval_line(line: str) -> bool:
-    return re.search(r"eval|\bval[_ ]", line, re.IGNORECASE) is not None
-
-
 def parse_lines(lines: list[str], primary_metric: str | None = None) -> dict:
     progress: dict = {}
     losses: list[float] = []
     pm = (primary_metric or "").strip()
-    eval_history: list[dict] = []
+    eval_re = _build_eval_re(pm)
 
     for line in lines:
-        if _is_eval_line(line):
-            checkpoint: dict = {}
-            if m := VAL_STEP_RE.search(line):
-                step = int(m.group(1) or m.group(2))
-                progress["val_step"] = step
-                checkpoint["val_step"] = step
-            for key, raw in METRIC_RE.findall(line):
-                if key.lower() in ("step", "val_step", "train_step"):
-                    continue
-                value = _float(raw)
-                if value is None:
-                    continue
-                progress[key] = value
-                checkpoint[key] = value
-                if pm and key == pm:
-                    progress["val_metric"] = value
-                    checkpoint["val_metric"] = value
-            if checkpoint and checkpoint.get("val_step") is not None:
-                # 避免重复记录同一 step
-                last = eval_history[-1] if eval_history else None
-                if not last or last.get("val_step") != checkpoint.get("val_step"):
-                    eval_history.append(checkpoint)
+        if eval_re and (m := eval_re.search(line)):
+            # 验证行：一步提取步号和 primary_metric 值
+            # 强制格式 "Eval at step {step}: {primary_metrics.name}={value}"
+            progress["val_step"] = int(m.group(1))
+            progress["val_metric"] = _float(m.group(2))
         else:
             if m := TRAIN_STEP_RE.search(line):
                 progress["train_step"] = int(m.group(1))
@@ -90,7 +74,6 @@ def parse_lines(lines: list[str], primary_metric: str | None = None) -> dict:
     else:
         progress["loss_exploded"] = False
 
-    progress["eval_history"] = eval_history
     return progress
 
 

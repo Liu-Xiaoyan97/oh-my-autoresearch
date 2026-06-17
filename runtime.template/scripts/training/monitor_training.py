@@ -57,35 +57,22 @@ def _emit_event(repo_root: str, event_type: str, payload: dict):
 def _parse_eval_history(lines: list[str], primary_metric: str | None) -> list[dict]:
     """从日志行中提取所有 eval 检查点。返回按步号排序的列表。"""
     import re
-    val_step_re = re.compile(r"(?:val_step\s*[=:]\s*(\d+))|(?:eval\s+at\s+step\s+(\d+))", re.IGNORECASE)
-    metric_re = re.compile(
-        r"(?:^|[\s,])([A-Za-z_][A-Za-z0-9_.\-]*)\s*[=:]\s*([-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?)",
-        re.IGNORECASE,
-    )
+    from parse_train_log import _build_eval_re, _float as _pfloat
 
-    pm = (primary_metric or "").strip()
+    eval_re = _build_eval_re(primary_metric)
+    if not eval_re:
+        return []
+
     checkpoints: list[dict] = []
-
     for line in lines:
-        if not re.search(r"eval|\bval[_ ]", line, re.IGNORECASE):
-            continue
-        m = val_step_re.search(line)
+        m = eval_re.search(line)
         if not m:
             continue
-        step = int(m.group(1) or m.group(2))
-        checkpoint = {"val_step": step}
-        for key, raw in metric_re.findall(line):
-            if key.lower() in ("step", "val_step", "train_step"):
-                continue
-            try:
-                value = float(raw)
-            except ValueError:
-                continue
-            checkpoint[key] = value
-            if pm and key == pm:
-                checkpoint["val_metric"] = value
-        if "val_metric" in checkpoint:
-            checkpoints.append(checkpoint)
+        step = int(m.group(1))
+        value = _pfloat(m.group(2))
+        if value is None:
+            continue
+        checkpoints.append({"val_step": step, "val_metric": value})
 
     # 按步号排序去重
     seen = set()
