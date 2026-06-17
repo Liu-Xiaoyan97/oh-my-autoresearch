@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# uninstall.sh - 卸载 research-loop-agent 注入的文件
+# uninstall.sh - 卸载 oh-my-autoresearch 注入的文件
 # 用法: ./uninstall.sh <host-repo-root>
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,7 +16,7 @@ fi
 RUNTIME_TARGET="$HOST_ROOT/runtime"
 CLAUDE_TARGET="$HOST_ROOT/.claude"
 
-echo "=== research-loop-agent 卸载 ==="
+echo "=== oh-my-autoresearch 卸载 ==="
 
 # 1. 移除 .claude 中本 submodule 注入的文件
 if [[ -d "$CLAUDE_TARGET" ]]; then

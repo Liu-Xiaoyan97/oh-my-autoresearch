@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# upgrade.sh - 升级 research-loop-agent 模板文件
+# upgrade.sh - 升级 oh-my-autoresearch 模板文件
 # 用法: ./upgrade.sh <host-repo-root>
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,7 +34,7 @@ copy_tree_no_clobber() {
     )
 }
 
-echo "=== Upgrade research-loop-agent ==="
+echo "=== Upgrade oh-my-autoresearch ==="
 
 # 1. 同步新增模板文件到 .claude
 echo ""

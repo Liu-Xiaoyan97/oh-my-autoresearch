@@ -2,7 +2,7 @@
 
 ## 概述
 
-`research-loop-agent` 采用四层分离架构：team-lead 主程序、Observer Sidecar、Claude Code Subagents、Runtime 文件系统。
+`oh-my-autoresearch` 采用四层分离架构：team-lead 主程序、Observer Sidecar、Claude Code Subagents、Runtime 文件系统。
 
 ## 组件
 

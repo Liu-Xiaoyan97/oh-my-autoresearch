@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 package = false
 
 [project]
-name = "research-loop-agent"
+name = "oh-my-autoresearch"
 version = "0.1.0"
 description = "Claude Code research loop agent submodule for automated neural architecture research"
 requires-python = ">=3.10"

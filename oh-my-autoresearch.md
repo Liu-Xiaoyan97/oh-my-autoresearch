@@ -14,7 +14,7 @@
 ## Runtime File System
 ### 整体项目文件架构
 ```
-research-loop-agent/
+oh-my-autoresearch/
 ├── README.md
 ├── LICENSE
 ├── VERSION

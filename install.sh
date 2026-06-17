@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# install.sh - 安装 research-loop-agent 到宿主 research-runtime 仓库
+# install.sh - 安装 oh-my-autoresearch 到宿主 research-runtime 仓库
 # 用法: ./install.sh <host-repo-root>
 #
 # 只安装 manifest.json 中列出的文件，且强制覆盖目标。
@@ -26,7 +26,7 @@ if [[ ! -f "$MANIFEST" ]]; then
     exit 1
 fi
 
-echo "=== research-loop-agent 安装 ==="
+echo "=== oh-my-autoresearch 安装 ==="
 echo "子模块目录: $SCRIPT_DIR"
 echo "宿主仓库:   $HOST_ROOT"
 

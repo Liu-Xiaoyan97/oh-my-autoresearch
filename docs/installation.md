@@ -3,8 +3,8 @@
 ## 作为 git submodule 添加
 
 ```bash
-git submodule add <repository-url> agent-system/research-loop-agent
-cd agent-system/research-loop-agent
+git submodule add <repository-url> agent-system/oh-my-autoresearch
+cd agent-system/oh-my-autoresearch
 ```
 
 ## 运行 install.sh

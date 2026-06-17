@@ -1,5 +1,5 @@
 {
-  "name": "research-loop-agent",
+  "name": "oh-my-autoresearch",
   "version": "0.1.0",
   "description": "Claude Code research loop agent submodule for automated neural architecture research",
   "claude_template": {
