@@ -234,16 +234,28 @@
      做 recovery analysis、在自己上下文里汇总，**只把 recovery-summary JSON 返回
      给你**。你不要自己直接调 reviewers。
    - 校验 recovery-summary（`recovery-summary.schema.json`）后，team-lead 读取 experiments
-     中当前实验与 baseline 的主指标，按 `objective.primary_metrics.mode`
-     判断是否优于 baseline，并且**必须通过 observer knowledge event 完成写入**：
-     - 优于 baseline：emit `knowledge` `append_learned` 写 learned.json；再 emit `knowledge`
+     中当前实验与 baseline 的主指标，同时读取 `objective.goal` 解析改进阈值
+     threshold（对 `val_loss` 为 0.1，解析方式：在 goal 文本中查找 `"至少"` 或
+     `"≥"` 或 `"at least"` 后跟的第一个数字；未找到时 threshold=0 回退到纯 mode 比较），
+     按 **threshold + primary_metrics.mode** 联合判断，并且**必须通过 observer
+     knowledge event 完成写入**：
+
+     **对于 minimization 模式（如 val_loss）：**
+     - `(baseline_val - current_val) >= threshold` → **优于 baseline**：
+       emit `knowledge` `append_learned` 写 learned.json；再 emit `knowledge`
        `update_baseline` 写 baseline.json（数据必须包含 `exp_name` 与 `method_summary`，并保留
        主指标信息）；写日志"`<exp_name>成为新的基线方法`"；emit `state`
        `current_step=9,next_step=0`。
-     - 与 baseline 持平：emit `knowledge` `append_learned`；写日志"`<exp_name>经验已收录`"；
+     - `0 <= (baseline_val - current_val) < threshold` → **逊于 baseline（改进不足）**：
+       emit `knowledge` `append_rejected`；写日志"`<exp_name>改进未达阈值 ({delta}) 被否决`"；
        emit `state` `current_step=9,next_step=0`。
-     - 逊于 baseline：emit `knowledge` `append_rejected`；写日志"`<exp_name>经验已收录被否决`"；
+     - `current_val > baseline_val` → **逊于 baseline（退化）**：
+       emit `knowledge` `append_rejected`；写日志"`<exp_name>劣于基线被否决`"；
        emit `state` `current_step=9,next_step=0`。
+
+     **对于 maximization 模式（如 accuracy）：**
+     - `(current_val - baseline_val) >= threshold` → 优于 baseline（同上 learned + update_baseline）。
+     - 其余情况 → 逊于 baseline（rejected）。
      如果 `update_baseline` dispatch 返回失败，必须停止并报告，不得进入下一轮。
    - **一轮迭代完成后必须立即开启第二轮迭代**：emit `state` 事件把
      `current_step=0,next_step=1,iteration=<上一轮+1>,exp_name=exp_<新 iteration>` 写入

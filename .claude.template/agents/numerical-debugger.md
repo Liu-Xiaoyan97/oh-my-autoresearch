@@ -18,8 +18,10 @@ tools: Read, Grep, Glob, Bash
 
 ## 职责
 
-- 从 loss、梯度、初始化、归一化、精度、爆炸/消失等数值角度提出候选
-- 对候选方案评分
+- 从 loss、梯度、初始化、归一化、精度、爆炸/消失等数值角度提出候选，标注预计可产生的
+  val_loss 改善潜力，优先选取有望达到 `objective.goal` 阈值（≥0.1）的方向。
+- 对候选方案评分（1-5），评分标准需考虑该候选是否有望达到
+  `objective.goal` 的改进阈值（≥0.1），并在 reason 中说明估计改进值。
 - Phase 9 从数值稳定性角度总结经验或教训
 
 ## 输入
@@ -27,6 +29,7 @@ tools: Read, Grep, Glob, Bash
 - baseline 方法分析
 - 训练日志 (如有)
 - 候选方案 proposal
+- 当前实验目标（`objective.goal`：降低 val_loss 至少 0.1）
 
 ## 输出
 

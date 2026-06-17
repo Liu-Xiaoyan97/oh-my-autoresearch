@@ -17,14 +17,17 @@ tools: Read, Grep, Glob, Bash
 
 ## 职责
 
-- 从模型结构、数据流、模块边界角度提出优化候选
-- 对候选方案评分
+- 从模型结构、数据流、模块边界角度提出优化候选，标注预计可产生的 val_loss 改善潜力，
+  优先选取有望达到 `objective.goal` 阈值（≥0.1）的方向。
+- 对候选方案评分（1-5），评分标准需考虑该候选是否有望达到
+  `objective.goal` 的改进阈值（≥0.1），并在 reason 中说明估计改进值。
 - Phase 9 从架构角度总结经验或教训
 
 ## 输入
 
 - baseline 方法分析
 - 候选方案 proposal
+- 当前实验目标（`objective.goal`：降低 val_loss 至少 0.1）
 
 ## 输出
 
