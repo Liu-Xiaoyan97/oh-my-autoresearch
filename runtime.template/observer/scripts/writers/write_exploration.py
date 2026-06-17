@@ -10,6 +10,7 @@
 """
 
 import json
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -29,6 +30,33 @@ def _ensure_table(conn: sqlite3.Connection):
     if not exists:
         conn.execute(exploration_ddl())
         conn.commit()
+
+
+def _resolve_decision_name(conn, exp_name, raw_value):
+    """若 decision 是 'candidate_N' 形式，解析为 orthogonal-direction-scout 中对应的 name。"""
+    if not isinstance(raw_value, str):
+        return raw_value
+    m = re.match(r'^candidate_(\d+)$', raw_value)
+    if not m:
+        return raw_value  # 已经是可读名称，保持原样
+
+    row = conn.execute(
+        'SELECT "orthogonal-direction-scout" FROM exploration WHERE exp_name = ?',
+        (exp_name,),
+    ).fetchone()
+    if not row or not row[0]:
+        return raw_value
+
+    try:
+        candidates = json.loads(row[0])
+        idx = int(m.group(1))  # candidate_4 → index 4（0-based）
+        if 0 <= idx < len(candidates):
+            name = candidates[idx].get("name")
+            if name:
+                return name
+    except (json.JSONDecodeError, IndexError, ValueError):
+        pass
+    return raw_value
 
 
 def write(runtime_root: str, payload: dict) -> bool:
@@ -67,6 +95,7 @@ def write(runtime_root: str, payload: dict) -> bool:
 
         elif action == "update_decision":
             value = data.get("decision", data)
+            value = _resolve_decision_name(conn, exp_name, value)
             conn.execute(
                 'UPDATE exploration SET "decision" = ? WHERE exp_name = ?',
                 (json.dumps(value, ensure_ascii=False), exp_name),
