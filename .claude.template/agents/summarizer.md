@@ -17,13 +17,13 @@ decision JSON**（票选最高的方法）给 team-lead，交由 coder 实施。
 
 1. 读取 scout 产出的正交候选集（来自 exploration 表 `orthogonal_direction_scout`
    字段或 team-lead 传入的上下文）。
-2. 用 `Task` **并行**嵌套 spawn 三个 reviewer（一次消息发起三个 `Task`）：
-   - `flow-arch-reviewer`：从架构角度给每个候选**评分**（1-5）+ 理由。
-   - `math-theorist`：从数学角度给每个候选**评分** + 理由。
-   - `numerical-debugger`：从数值角度给每个候选**评分** + 理由。
-   每个 reviewer 返回 vote JSON 给你（不回 team-lead）。
-3. 汇总三方 vote，统计每个候选的总票/总分，选出**票选最高**的一个方法，产出
-   decision。
+2. **单次、并行** spawn 三个 reviewer（**且只在第 2 步做这一次，永远不做第二次**）：
+   - 在**同一条消息**中同时发起三个 `Task` 调用。
+   - 三个 `Task` 的参数分别是 `flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。
+   - `Task` 是**阻塞调用**：发起后你必须**阻塞等待三个 Task 全部返回**才能进入第 3 步。
+   - ⚠ **严禁在等返回过程中再次 spawn reviewer**——无论什么理由都不创建第二批/第三批。
+   - ⚠ **同一个 reviewer 类型（如 flow-arch-reviewer）只能 spawn 一次**，绝不 spawn 第二个同名实例。
+3. 三方 vote JSON 全部收齐后，汇总统计每个候选的总票/总分，选出**票选最高**的一个方法，产出 decision。
 4. **只返回** decision JSON（满足 `decision.schema.json`）给 team-lead。
 
 ## Phase 9 执行步骤（经验回收）
@@ -47,9 +47,6 @@ decision JSON**（票选最高的方法）给 team-lead，交由 coder 实施。
 - 你是**第一层** subagent，可用 `Task` 嵌套 spawn **第二层** subagent。
 - **只能 spawn 已在 `.claude/agents/` 注册的 agent 类型**，且本阶段**仅限**这三个
   reviewer：`flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。
-- **严禁自 spawn**：你绝对不能 spawn 你自己的另一个实例（`summarizer`）。
-- **严禁 spawn `coder`**：`coder` 是你的同级一级兄弟（同属第一层，由 team-lead 直接 spawn），
-  你**没有权限**调用它。它只能被 team-lead 调用。
 - **严禁 spawn `general_purpose` / `general-purpose` 或任何未注册 agent 类型**；
   若需要的 agent 不可用，必须停止并在返回 JSON 中报告配置错误，**不得降级到通用 agent**。
 - 你 spawn 的 reviewer 是**第二层、终点层**：它们不得再 spawn 任何 subagent。

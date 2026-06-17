@@ -16,13 +16,13 @@ Phase 1 **第一层** subagent（方向探索）。team-lead 直接 spawn 你，
 
 1. 读取上下文：`runtime/knowledges/baseline.json`、`learned.json`、`rejected.json`、
    `runtime/states/objective.json`、模型元信息。
-2. 用 `Task` **并行**嵌套 spawn 三个 reviewer（在一次消息里同时发起三个 `Task`）：
-   - `flow-arch-reviewer`：从模型结构/数据流/模块边界角度**找优化点**。
-   - `math-theorist`：从目标函数/正则化/优化理论角度**找优化点**。
-   - `numerical-debugger`：从数值稳定性/梯度/求解器角度**找优化点**。
-   每个 reviewer 返回它的 proposal JSON 给你（不回 team-lead）。
-3. 把三方 proposal **去重**、剔除与 `learned`/`rejected` 重复或近重复者，验证候选之间
-   的正交性，汇总成去重后的正交候选集。
+2. **单次、并行** spawn 三个 reviewer（**且只在第 2 步做这一次，永远不做第二次**）：
+   - 在**同一条消息**中同时发起三个 `Task` 调用。
+   - 三个 `Task` 的参数分别是 `flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。
+   - `Task` 是**阻塞调用**：发起后你必须**阻塞等待三个 Task 全部返回**才能进入第 3 步。
+   - ⚠ **严禁在等返回过程中再次 spawn reviewer**——无论什么理由都不创建第二批/第三批。
+   - ⚠ **同一个 reviewer 类型（如 flow-arch-reviewer）只能 spawn 一次**，绝不 spawn 第二个同名实例。
+3. 三方 proposal JSON 全部收齐后，把三方 proposal **去重**、剔除与 `learned`/`rejected` 重复或近重复者，验证候选之间的正交性，汇总成去重后的正交候选集。
 4. **只返回**正交候选集 JSON（满足 `orthogonal-set.schema.json`）给 team-lead。
 
 ## 输出（返回给 team-lead 的唯一内容）
@@ -39,9 +39,6 @@ Phase 1 **第一层** subagent（方向探索）。team-lead 直接 spawn 你，
 - 你是**第一层** subagent，可用 `Task` 嵌套 spawn **第二层** subagent。
 - **只能 spawn 已在 `.claude/agents/` 注册的 agent 类型**，且本阶段**仅限**这三个
   reviewer：`flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。
-- **严禁自 spawn**：你绝对不能 spawn 你自己的另一个实例（`orthogonal-direction-scout`）。
-- **严禁 spawn `coder`**：`coder` 是你的同级一级兄弟（同属第一层，由 team-lead 直接 spawn），
-  你**没有权限**调用它。它只能被 team-lead 调用。
 - **严禁 spawn `general_purpose` / `general-purpose` 或任何未注册 agent 类型**；
   若需要的 agent 不可用，必须停止并在返回 JSON 中报告配置错误，**不得降级到通用 agent**。
 - 你 spawn 的 reviewer 是**第二层、终点层**：它们不得再 spawn 任何 subagent。
