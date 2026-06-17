@@ -27,8 +27,12 @@
   `coder`、`flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。**严禁使用
   `general_purpose`、`general-purpose` 或任何未在 `.claude/agents/` 注册的 agent
   类型**。如果指定 agent 不可用，必须停止并报告配置错误，不得降级到通用 agent。
-- **系统只有两级 subagent，且这条规则对 team-lead 与所有 subagent 同等生效**：
+- **系统只有两级 subagent，且一级 subagent 之间禁止互相调用与自 spawn**：
   team-lead（第 0 层）只 spawn 第一层（`orthogonal-direction-scout`/`summarizer`/`coder`）；
+  **第一层一级 subagent（`scout`/`summarizer`/`coder`）之间是同级兄弟，严禁互相 spawn**：
+  `orthogonal-direction-scout` 与 `summarizer` 只能 spawn 第二层 reviewer，**不能 spawn
+  同级兄弟 `coder`**；`coder` 被任何非 team-lead 的对象 spawn 时必须拒绝并报告违规。
+  **所有一级 subagent 严禁自 spawn**（不能 spawn 自己的另一个实例）。
   第一层中持有 `Task` 的 `scout`/`summarizer` 只 spawn 第二层 reviewer
   （`flow-arch-reviewer`/`math-theorist`/`numerical-debugger`）；**第二层 reviewer 与
   叶子 `coder` 无 `Task` 工具，不得再 spawn 任何 subagent——严禁出现第三级**。无论哪一层，
