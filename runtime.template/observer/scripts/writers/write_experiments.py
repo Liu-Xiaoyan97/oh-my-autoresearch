@@ -13,11 +13,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "database"))
-from schema_spec import load_objective, experiments_ddl, metric_step_columns, states_exp_name  # noqa: E402
+from schema_spec import DB_PATH, load_objective, experiments_ddl, states_exp_name  # noqa: E402
 
 
 def _get_db_path(runtime_root: str) -> str:
-    return str(Path(runtime_root) / "db" / "runtime.sqlite")
+    return str(Path(runtime_root) / DB_PATH)
 
 
 def _ensure_table(conn: sqlite3.Connection, runtime_root: str):
@@ -60,23 +60,8 @@ def write(runtime_root: str, payload: dict) -> bool:
             conn.commit()
 
         elif action == "update_metric":
-            metric = _metric_name(runtime_root)
-            if "eval_history" in data and isinstance(data["eval_history"], list):
-                # 批量写入 eval_history 中所有检查点
-                for ck in data["eval_history"]:
-                    vs = ck.get("val_step")
-                    vm = ck.get("val_metric")
-                    if vs is not None and vm is not None:
-                        col = f"{metric}_step_{int(vs)}"
-                        cols = {r[1] for r in conn.execute('PRAGMA table_info(experiments)')}
-                        if col not in cols:
-                            conn.execute(f'ALTER TABLE experiments ADD COLUMN "{col}" REAL DEFAULT 0')
-                        conn.execute(
-                            f'UPDATE experiments SET "{col}" = ? WHERE exp_name = ?',
-                            (vm, exp_name),
-                        )
-            elif "val_step" in data and "val_metric" in data:
-                col = f"{metric}_step_{int(data['val_step'])}"
+            if "val_step" in data and "val_metric" in data:
+                col = f'{_metric_name(runtime_root)}_step_{int(data["val_step"])}'
                 cols = {r[1] for r in conn.execute('PRAGMA table_info(experiments)')}
                 if col not in cols:
                     conn.execute(f'ALTER TABLE experiments ADD COLUMN "{col}" REAL DEFAULT 0')
@@ -84,7 +69,7 @@ def write(runtime_root: str, payload: dict) -> bool:
                     f'UPDATE experiments SET "{col}" = ? WHERE exp_name = ?',
                     (data["val_metric"], exp_name),
                 )
-            conn.commit()
+                conn.commit()
 
         elif action == "mark_complete":
             conn.commit()  # 宽表无 status 列；确保行已存在即可

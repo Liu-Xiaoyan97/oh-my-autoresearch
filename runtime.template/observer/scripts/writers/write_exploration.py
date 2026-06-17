@@ -15,11 +15,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "database"))
-from schema_spec import exploration_ddl, states_exp_name  # noqa: E402
+from schema_spec import DB_PATH, exploration_ddl, states_exp_name  # noqa: E402
 
 
 def _get_db_path(runtime_root: str) -> str:
-    return str(Path(runtime_root) / "db" / "runtime.sqlite")
+    return str(Path(runtime_root) / DB_PATH)
 
 
 def _ensure_table(conn: sqlite3.Connection):

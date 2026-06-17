@@ -6,6 +6,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from schema_spec import DB_PATH
+
 
 def ensure_step_column(conn: sqlite3.Connection, val_step: int) -> str:
     col = f"step_{val_step}"
@@ -27,7 +30,7 @@ def main():
         print("用法: update_experiment_metric.py <exp_name> [train_step] [train_loss] [val_step] [val_metric]", file=sys.stderr)
         sys.exit(1)
 
-    db_path = str(Path(runtime_root) / "db" / "runtime.sqlite")
+    db_path = str(Path(runtime_root) / DB_PATH)
     conn = sqlite3.connect(db_path)
     now = datetime.now(timezone.utc).isoformat()
 

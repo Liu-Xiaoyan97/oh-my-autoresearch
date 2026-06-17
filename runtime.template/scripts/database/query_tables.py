@@ -10,6 +10,9 @@ import sqlite3
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from schema_spec import DB_PATH
+
 
 def _fetch(conn, table):
     try:
@@ -50,7 +53,7 @@ def main():
     ap.add_argument("--width", type=int, default=40, help="单元格最大宽度")
     args = ap.parse_args()
 
-    db = Path(args.runtime_root) / "db" / "runtime.sqlite"
+    db = Path(args.runtime_root) / DB_PATH
     if not db.exists():
         print(f"数据库不存在: {db}", file=sys.stderr)
         sys.exit(1)

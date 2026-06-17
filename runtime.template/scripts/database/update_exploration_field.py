@@ -7,6 +7,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from schema_spec import DB_PATH
+
 
 def main():
     runtime_root = sys.argv[1] if len(sys.argv) > 1 else "runtime"
@@ -28,7 +31,7 @@ def main():
         print(f"错误: 未知字段 {field}，可选: {list(field_map.keys())}", file=sys.stderr)
         sys.exit(1)
 
-    db_path = str(Path(runtime_root) / "db" / "runtime.sqlite")
+    db_path = str(Path(runtime_root) / DB_PATH)
     conn = sqlite3.connect(db_path)
     now = datetime.now(timezone.utc).isoformat()
 

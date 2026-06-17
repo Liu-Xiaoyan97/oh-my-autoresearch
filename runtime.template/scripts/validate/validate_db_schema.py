@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "database"))
 from schema_spec import (  # noqa: E402
-    load_objective, experiments_columns, experiments_ddl,
+    DB_PATH, load_objective, experiments_columns, experiments_ddl,
     exploration_ddl, EXPLORATION_COLUMNS,
 )
 
@@ -70,7 +70,7 @@ def main():
     except Exception as e:
         _out(False, f"读取 objective 失败: {e}")
 
-    db_path = Path(runtime_root) / "db" / "runtime.sqlite"
+    db_path = Path(runtime_root) / DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     try:

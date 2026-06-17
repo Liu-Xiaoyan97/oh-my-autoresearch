@@ -19,7 +19,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve()
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[3] / "scripts" / "database"))
 from observation_store import append as store_append  # noqa: E402
+from schema_spec import DB_PATH  # noqa: E402
 
 
 def _load_cfg(runtime_root: str) -> dict:
@@ -34,7 +36,7 @@ def _load_cfg(runtime_root: str) -> dict:
 
 
 def _experiments_row(runtime_root: str, exp_name: str):
-    db = Path(runtime_root) / "db" / "runtime.sqlite"
+    db = Path(runtime_root) / DB_PATH
     if not db.exists():
         return None
     conn = sqlite3.connect(str(db))
@@ -49,7 +51,7 @@ def _experiments_row(runtime_root: str, exp_name: str):
 
 
 def _exploration_row(runtime_root: str, exp_name: str):
-    db = Path(runtime_root) / "db" / "runtime.sqlite"
+    db = Path(runtime_root) / DB_PATH
     if not db.exists():
         return None
     conn = sqlite3.connect(str(db))

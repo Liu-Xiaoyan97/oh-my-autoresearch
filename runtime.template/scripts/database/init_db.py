@@ -6,11 +6,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from schema_spec import load_objective, experiments_ddl, exploration_ddl  # noqa: E402
+from schema_spec import DB_PATH, load_objective, experiments_ddl, exploration_ddl  # noqa: E402
 
 
 def init_db(runtime_root: str) -> str:
-    db_path = Path(runtime_root) / "db" / "runtime.sqlite"
+    db_path = Path(runtime_root) / DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
     objective = load_objective(runtime_root)
     conn = sqlite3.connect(str(db_path))

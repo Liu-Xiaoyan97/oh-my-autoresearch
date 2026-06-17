@@ -11,6 +11,7 @@ exploration 固定 4 列：
 import json
 from pathlib import Path
 
+DB_PATH = "db/runtime.sqlite"
 EXPLORATION_COLUMNS = ["exp_name", "orthogonal-direction-scout", "decision", "commit"]
 
 
