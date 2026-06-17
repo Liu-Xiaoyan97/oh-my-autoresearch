@@ -61,6 +61,22 @@ if echo "$TOOL_INPUT" | grep -qiE '(start_observer|stop_observer|restart_observe
     BLOCK_REASON="检测到直接调用 observer lifecycle 脚本。observer 由 session hook 管理，team-lead 不得直接控制。"
 fi
 
+# ── 守卫 4: 拦截用 general-purpose / general_purpose subagent 的 Agent 调用 ──────
+if echo "$TOOL_INPUT" | grep -qiE '"subagent_type"[[:space:]]*:[[:space:]]*"general.purpose"' 2>/dev/null; then
+    BLOCKED=true
+    BLOCK_REASON="检测到尝试用 general-purpose/general_purpose 类型创建 Agent。CLAUDE.md 明确禁止使用未注册 agent 类型，只能使用已在 .claude/agents/ 注册的类型。"
+fi
+
+# ── 守卫 5: 拦截未在 .claude/agents/ 注册的 subagent_type ──────────────────
+REGISTERED_AGENTS="orthogonal-direction-scout|summarizer|coder|flow-arch-reviewer|math-theorist|numerical-debugger"
+if echo "$TOOL_INPUT" | grep -qiE '"subagent_type"' 2>/dev/null; then
+    EXTRACTED=$(echo "$TOOL_INPUT" | grep -oE '"subagent_type"[[:space:]]*:[[:space:]]*"[^"]*"' 2>/dev/null | grep -oE '"[^"]*"$' | tr -d '"' 2>/dev/null || true)
+    if [[ -n "$EXTRACTED" ]] && ! echo "$EXTRACTED" | grep -qiE "^($REGISTERED_AGENTS)$" 2>/dev/null; then
+        BLOCKED=true
+        BLOCK_REASON="检测到未注册的 subagent_type: '$EXTRACTED'。CLAUDE.md 明确禁止使用未注册 agent 类型，只能使用已在 .claude/agents/ 注册的类型：${REGISTERED_AGENTS//|/、}"
+    fi
+fi
+
 if [[ "$BLOCKED" == "true" ]]; then
     echo "[pre-tool-use] ⛔ 拦截: $BLOCK_REASON" >&2
     exit 1
