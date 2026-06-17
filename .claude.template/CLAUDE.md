@@ -179,9 +179,11 @@
       `runtime/scripts/training/monitor_training.py runtime <exp_name>` 解析进度并唤醒
       team-lead 检查。**绝不允许**用前台 `sleep`、`while sleep`、`sleep && monitor`
       之类的轮询循环,也不允许自己用 `uv run`/`python` 跑训练或监控。
-      **每次 cron 触发拿到 monitor 的 training-progress JSON 后,必须 emit `experiments` 事件
-      `action=update_metric`、`exp_name=<exp_name>`、`data={train_step,train_loss,val_step,val_metric}`
-      (取 JSON 对应字段),由 observer 写入 experiments 表——否则表内指标恒为 0。**
+      ⚠ `monitor_training.py` **已自带自动发射**所有未写入的 eval 检查点指标
+      （通过 `experiments update_metric` 事件），**team-lead 无需再手动发射
+      update_metric 事件**。模型只需读取 monitor 返回的 training-progress JSON
+      判断训练是否结束/失败。**所以 cron 每次触发后，模型只需要读 progress JSON，
+      不做其它 emit 操作。**
    d. cron 每次触发读 monitor 输出判断训练是否结束/失败。训练结束 → 状态 8:
       **立即 `CronDelete` 取消该轮询 cron**(绝不留孤儿 cron);emit observer `log` 事件
       "训练结束" + `state` 事件让 observer 写 states.json `current_step=8, next_step=9`;
@@ -204,8 +206,9 @@
       `<project_root>/launchscripts/query_from_remote.sh <exp_name>`（登录 hosts 第一个 host，
       取回远端日志到本地 `runtime/logs/train-of-<exp_name>.log`，再用 `monitor_training.py` 解析为
       training-progress JSON）。**绝不用前台 `sleep`/`while sleep`，也不自己 ssh 跑监控。**
-      **每次 cron 触发拿到该 JSON 后必须 emit `experiments` `action=update_metric`、`exp_name=<exp_name>`、
-      `data={train_step,train_loss,val_step,val_metric}` 写入 experiments 表(否则指标恒为 0)。**
+      ⚠ `monitor_training.py` **已自带自动发射**所有未写入的 eval 检查点指标
+      （通过 `experiments update_metric` 事件），**team-lead 无需再手动发射
+      update_metric 事件**。模型只需读取 progress JSON 判断训练是否结束/失败。
    c. cron 每次触发读 query 输出判断是否结束/失败（如 train_step 达到 `num_training_steps`）。
       训练结束 → **主程序必须立即 `CronDelete` 取消该轮询 cron**（远程训练同样绝不留孤儿 cron）；
       emit `log`"训练结束" + `experiments` `action=mark_complete`、`exp_name=<exp_name>`(status=completed)
