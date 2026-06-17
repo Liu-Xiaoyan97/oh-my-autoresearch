@@ -40,7 +40,7 @@ BLOCK_REASON=""
 STATES_JSON="$(cd "$RUNTIME_ROOT" 2>/dev/null && realpath "states/states.json" 2>/dev/null || echo "$RUNTIME_ROOT/states/states.json")"
 
 # 检测各类写入模式
-if echo "$TOOL_INPUT" | grep -qiE '(>|>>|cat |echo |printf|tee ).*states\.json' 2>/dev/null; then
+if echo "$TOOL_INPUT" | grep -qiE '(>|>>|tee ).*states\.json' 2>/dev/null; then
     BLOCKED=true
     BLOCK_REASON="检测到直接写入 states.json 的 Bash 命令。请使用 observer state 事件推进状态机：\n  python3 runtime/observer/scripts/ingest/emit_event.py state '<payload_json>' runtime"
 fi
