@@ -121,19 +121,26 @@
 
    每个一级 subagent **销毁（返回）后**由 team-lead 推进状态（exp_name=`<exp_name>`）。
    **推进状态 = emit observer `state` 事件让 observer 写 states.json；team-lead 绝不自己写
-   states.json（无写权）。** 下文"states.json `current_step=X, next_step=Y`"指该 `state`
-   事件 payload 的目标值，写盘由 observer 完成。同理 emit `exploration`/`log` 事件也由
-   observer 落盘，team-lead 只负责发事件：
+   states.json（无写权）。PreToolUse hook 会拦截直接写入 states.json 的命令。**
+   下文"states.json `current_step=X, next_step=Y`"指该 `state` 事件 payload 的目标值，
+   写盘由 observer 完成。`exploration` 事件已实现**自动发射**（见下方 a-c 的说明），
+   team-lead 无需再手动调用 emit_event.py：
 
-   a. **scout 销毁 → 状态 3**：校验其 orthogonal-set JSON；emit `exploration` 事件
-      `action=update_orthogonal_candidates`、`data.orthogonal_direction_scout=<去重后正交候选集>`；
-      写日志"正交候选集生成完成"；states.json 更新为 `current_step=3, next_step=4`。
-   b. **summarizer 销毁 → 状态 4**：校验其 decision JSON；emit `exploration` 事件
-      `action=update_decision`、`data.decision=<票选最高方法>`；写日志"票选最高方法完成"；
-      states.json `current_step=4, next_step=5`。
-   c. **coder 销毁 → 状态 5**：校验其 commit-result JSON；emit `exploration` 事件
-      `action=update_commit`、`data.commit_id=<commit id>`；写日志"代码变更完成"；
+   a. **scout 销毁 → 状态 3**：调用 `validate_subagent_result.py` 校验其 orthogonal-set JSON
+      （**该脚本自动** emit `exploration` 事件 `action=update_orthogonal_candidates`、
+      `data.orthogonal_direction_scout=<去重后正交候选集>`）。写日志"正交候选集生成完成"；
+      emit `state` 事件 `current_step=3, next_step=4`。
+      ⚠ **注意**：exploration 事件已被自动发射，**不要**再手动调 emit_event.py。
+   b. **summarizer 销毁 → 状态 4**：调用 `validate_subagent_result.py` 校验其 decision JSON
+      （**该脚本自动** emit `exploration` 事件 `action=update_decision`、
+      `data.decision=<票选最高方法>`）。写日志"票选最高方法完成"；
+      emit `state` 事件 `current_step=4, next_step=5`。
+      ⚠ **注意**：exploration 事件已被自动发射，**不要**再手动调 emit_event.py。
+   c. **coder 销毁 → 状态 5**：调用 `validate_subagent_result.py phase=5` 校验其 commit-result JSON
+      （**该脚本自动** emit `exploration` 事件 `action=update_commit`、
+      `data.commit_id=<commit id>`）。写日志"代码变更完成"；
       states.json `current_step=5, next_step=6`。
+      ⚠ **注意**：exploration 事件已被自动发射，**不要**再手动调 emit_event.py。
       （**remote 模式**：coder 不走 git，而是执行 `copy_to_remote.sh` 把代码覆盖到远端，
       commit_id 为 sentinel `remote-sync:<first_host>`。）
    d. **所有 subagent 销毁后 → 状态 6**：
@@ -245,6 +252,11 @@ python3 runtime/observer/scripts/ingest/emit_event.py <event_type> '<payload_jso
 
 payload 必须符合 `runtime/observer/schemas/*.schema.json`。
 
+> ⚠ **注意**：`exploration` 事件在 `validate_subagent_result.py` 中已实现**自动发射**。
+> 在 subagent 返回后，只需调用 `validate_subagent_result.py` 校验结果，无需再手动
+> 调用 `emit_event.py` 发射 exploration 事件。Phase 0 的 `validate_runtime.py` 会自动
+> 校验事件链完整性（参见 `validate_event_chain.py`）。
+
 **写入参数一律"文件优先"：凡有权威文件来源的上下文参数，writer 一律从文件读取，payload 只作兜底**，
 team-lead 无需（也不应依赖）在 payload 里给定它们：
 
@@ -273,14 +285,28 @@ team-lead 无需（也不应依赖）在 payload 里给定它们：
   （scout 收到的是"找优化点"proposal，summarizer 收到的是"评分"vote）。
 - **coder 是第一层叶子**，不嵌套子 subagent。
 
-team-lead 需要校验的 JSON（第一层返回）：
+team-lead 需要校验的 JSON（第一层返回，**exploration 事件自动发射**）：
 
-- `orthogonal-direction-scout`: `orthogonal-set.schema.json`
-- `summarizer` Phase 1: `decision.schema.json`；Phase 9: `recovery-summary.schema.json`
-- `coder`: `commit-result.schema.json`
+- `orthogonal-direction-scout` phase=1: `orthogonal-set.schema.json`
+- `summarizer` phase=1: `decision.schema.json`；phase=9: `recovery-summary.schema.json`
+- `coder` **phase=5**（最终提交结果）: `commit-result.schema.json`
+  - （coder phase=1 用 `patch-plan.schema.json` 校验修改计划，不自动发射事件）
 
 第二层 reviewer 的 proposal / vote / recovery 由调用它的 scout / summarizer **内部校验**，
 不回 team-lead。
 
 如果第一层校验失败，停止推进当前阶段，记录 observer log，并向用户说明需要修正的
 结构化输出。
+
+## 事件自动发射与守卫
+
+`validate_subagent_result.py` 校验通过后**自动发射**对应 exploration 事件：
+- `orthogonal-direction-scout` phase=1 → `exploration update_orthogonal_candidates`
+- `summarizer` phase=1 → `exploration update_decision`
+- `coder` phase=5 → `exploration update_commit`
+- `summarizer` phase=9 → 不自动发射（由 LLM 对比 baseline 后手动决定 knowledge 事件）
+
+Phase 0 校验（`validate_runtime.py`）自动检测事件链完整性，若缺失可通过
+`validate_event_chain.py --fix` 自动修复。
+
+**PreToolUse hook** 拦截直接写入 `states.json` 或调用 observer lifecycle 脚本的命令。
