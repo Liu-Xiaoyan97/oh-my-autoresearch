@@ -169,8 +169,8 @@
       `data.commit_id=<commit id>`）。写日志"代码变更完成"；
       emit `state` 事件 `current_step=5, next_step=6`。
       ⚠ **注意**：exploration 事件已被自动发射，**不要**再手动调 emit_event.py。
-      （**remote 模式**：coder 不走 git，而是执行 `copy_to_remote.sh` 把代码覆盖到远端，
-      commit_id 为 sentinel `remote-sync:<first_host>`。）
+      （**remote 模式**：coder 先调用 `commit_changes.sh` 在本地 project_root 仓库提交（取真实 SHA），
+      再执行 `copy_to_remote.sh` 将代码覆盖到远端。commit_id 为 `commit_changes.sh` 回显的真实 SHA。）
    d. **所有 subagent 销毁后 → 状态 6**：
       - **remote=false（本地）**：ssh 登录跳板机、从远程仓库同步代码；写日志"代码上传成功"。
       - **remote=true**：代码已由 coder 的 `copy_to_remote.sh` 覆盖上传，无需再次同步；写日志
