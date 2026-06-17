@@ -24,3 +24,7 @@ htmlcov/
 
 # Local settings
 settings.local.json
+runtime/observer/llm.config.json
+runtime/observer/run/observer.status
+runtime/observer/observations/*.sqlite
+runtime/observer/observations/*.jsonl

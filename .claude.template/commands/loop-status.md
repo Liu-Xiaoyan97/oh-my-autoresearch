@@ -12,7 +12,14 @@
 
 1. 读取 `runtime/states/states.json`，显示 `current_step`、`next_step`、`iteration`、`exp_name`。
 2. 读取 `runtime/logs/train-of-<exp_name>.log` 最后 20 行。
-3. 调用 `runtime/observer/scripts/lifecycle/healthcheck.sh` 检查 observer 健康。
+3. **只读**查看自治 observer 的心跳状态文件（主程序不调用 observer，任何 lifecycle/健康检查
+   均不由主程序发起；observer 每轮轮询自写该文件）：
+
+   ```bash
+   cat runtime/observer/run/observer.status 2>/dev/null || echo 'observer 未运行(由 hook 管理)'
+   ```
+
+   字段：`pid`/`alive`/`offset`/`llm_enabled`/`last_poll`。
 4. 查询并展示数据表全部记录（team-lead 读 SQLite 允许，只有写须走 observer event）：
 
    ```bash

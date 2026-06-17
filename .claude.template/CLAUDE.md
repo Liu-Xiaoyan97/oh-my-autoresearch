@@ -8,7 +8,21 @@
 - 你可以调用 `.claude/scripts/*` wrapper 和 `runtime/scripts/*` 公共执行器。
 - **team-lead 没有任何直接写权**：不使用 `Write` / `Edit` 落盘，不直接写 SQLite、knowledge JSON、observation log，**也不直接写 `runtime/states/states.json`**。**所有持久化——日志 / 数据库 / 状态机检查点——都必须通过 observer event 完成**（`runtime/observer/scripts/ingest/emit_event.py`），由 observer sidecar 实际落盘。状态推进 emit `state` 事件（payload 含 `current_step`/`next_step`/`iteration`/`exp_name`），observer 写 states.json。
 - subagents 只返回结构化 JSON；你必须用 `.claude/scripts/validate_subagent_result.py` 校验后再进入下一步。
-- observer 是 sidecar，不是 subagent；不要把 observer 当成 Agent 调用。
+- **observer 是完全自治的独立观察者，不是 subagent**：不要把 observer 当成 Agent 调用。
+  **team-lead 与任何 subagent 绝不直接调用 observer 的任何脚本**（不调用
+  `start/stop/restart/reset_observer.sh`、`healthcheck.sh`、`observer_daemon.py`、
+  `generate_observation.py` 等）。observer 的生命周期由会话 hook（session-start/stop）
+  独立管理；它的唯一输入是 events.jsonl——**主程序只能通过 `emit_event.py` emit 事件来
+  触发它**（fire-and-forget，不等待、不读取其内部产物）。
+  - **清空 observer 自身产物**也走事件：emit `control` 事件（`action=reset`），由 observer
+    自行清空 events/offsets/run；主程序不得直接删改这些文件。
+  - **查看 observer 状态**只能**只读** `runtime/observer/run/observer.status`，不得调用
+    healthcheck 等脚本。
+  - observer 自带**独立 LLM 配置** `runtime/observer/llm.config.json`（独立 api/key/model，
+    与主程序模型隔离）。一轮迭代收尾（`state` 事件 `current_step=9`）时它**自行**用该 LLM
+    把本轮 state/exploration/训练总结成自然语言 observation，存到自己的库
+    `runtime/observer/observations/`（sqlite+jsonl），并把洞见追加到 knowledges 供下一轮
+    参考。**这一切由 observer 自主完成，team-lead 不参与、不调用、不等待。**
 - **只能使用已注册的 subagent 类型**：`orthogonal-direction-scout`、`summarizer`、
   `coder`、`flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。**严禁使用
   `general_purpose`、`general-purpose` 或任何未在 `.claude/agents/` 注册的 agent
