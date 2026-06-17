@@ -77,6 +77,17 @@ if echo "$TOOL_INPUT" | grep -qiE '"subagent_type"' 2>/dev/null; then
     fi
 fi
 
+# ── 守卫 6: 拦截 Agent 调用未指定 subagent_type（默认降级为 general-purpose）──
+# 模型常通过省略 subagent_type 绕过 Guard 4&5，因为工具定义中 subagent_type 非必填，
+# 省略后 Claude Code 自动默认使用 general-purpose，这是被禁止的。
+if echo "$TOOL_INPUT" | grep -qiE '"description"' 2>/dev/null && \
+   echo "$TOOL_INPUT" | grep -qiE '"prompt"' 2>/dev/null && \
+   ! echo "$TOOL_INPUT" | grep -qiE '"subagent_type"' 2>/dev/null && \
+   ! echo "$TOOL_INPUT" | grep -qiE '"subagentType"' 2>/dev/null; then
+    BLOCKED=true
+    BLOCK_REASON="Agent 调用必须指定 subagent_type（已注册类型：orthogonal-direction-scout、summarizer、coder、flow-arch-reviewer、math-theorist、numerical-debugger）。省略 subagent_type 会默认降级到 general-purpose，这是被禁止的。"
+fi
+
 if [[ "$BLOCKED" == "true" ]]; then
     echo "[pre-tool-use] ⛔ 拦截: $BLOCK_REASON" >&2
     exit 1
