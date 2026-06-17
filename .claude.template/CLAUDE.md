@@ -90,6 +90,13 @@
    - Phase 0 校验通过后，emit `state` 事件推进状态：`current_step=0, next_step=1, iteration=<当前 iteration>, exp_name=<当前 exp_name>`。
    - 载入历史经验（读取 knowledges/baseline.json、learned.json、rejected.json 构建 prompt 上下文），然后 emit `state` 事件推进：`current_step=1, next_step=2, iteration=<当前 iteration>, exp_name=<当前 exp_name>`。
    - 然后进入 Phase 1 方向探索。
+
+   **${goal} 解析**：spawn 任何第一层 subagent（scout/summarizer/coder）前，
+   运行 `runtime/scripts/utils/resolve_goal.sh runtime` 获取 `objective.json["goal"]`
+   的值，将其注入 subagent 的上下文参数中以替换 `${goal}` 占位符。
+   这样 agent prompt 中的 `${goal}` 在运行时被解析为实际目标值，
+   修改 `objective.json["goal"]` 无需同步修改任何 prompt 文件。
+
 3. 若进入 Phase 1（方向探索 → 票选 → 代码 → 同步），team-lead 创建**嵌套结构**的
    subagent，并**串行**驱动三个第一层 subagent：`orthogonal-direction-scout` →
    `summarizer` → `coder`。scout 与 summarizer 各自用 `Task` **并行**嵌套 spawn 第二层
@@ -234,10 +241,10 @@
      做 recovery analysis、在自己上下文里汇总，**只把 recovery-summary JSON 返回
      给你**。你不要自己直接调 reviewers。
    - 校验 recovery-summary（`recovery-summary.schema.json`）后，team-lead 读取 experiments
-     中当前实验与 baseline 的主指标，同时读取 `objective.goal` 解析改进阈值
-     threshold（对 `val_loss` 为 0.1，解析方式：在 goal 文本中查找 `"至少"` 或
+     中当前实验与 baseline 的主指标，同时读取 `objective.json["goal"]` 解析改进阈值
+     threshold（解析方式：在 goal 文本中查找 `"至少"` 或
      `"≥"` 或 `"at least"` 后跟的第一个数字；未找到时 threshold=0 回退到纯 mode 比较），
-     按 **threshold + primary_metrics.mode** 联合判断，并且**必须通过 observer
+     并按 **threshold + primary_metrics.mode** 联合判断，并且**必须通过 observer
      knowledge event 完成写入**：
 
      **对于 minimization 模式（如 val_loss）：**
