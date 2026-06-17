@@ -124,12 +124,11 @@ if [[ "$IS_WRITE" == "true" ]] || [[ "$IS_EDIT" == "true" ]]; then
 fi
 
 # ── 守卫 8: 禁止在仓库目录内通过 Bash 创建文件（允许 /tmp、>& 描述符重定向）──
-# 检测模式：> 后跟一个相对路径（不以 / 开头，不是 & 文件描述符）。
-# 不匹配：2>&1、>/dev/null、>/tmp/xxx 等系统路径。
+# 检测模式：> 后跟一个带文件扩展名（.json/.log/.sh/.py 等）的相对路径。
+# 这种精确匹配大幅减少假阳性（排除 2>&1、grep 正则中的 >、echo 输出等）。
 # 注意：coder 对 project/ 下代码的 Write/Edit 由守卫 7 判定，不在此拦截。
-DEST_PATH=$(echo "$TOOL_INPUT" | grep -oE '(>|>>)[[:space:]]*[a-zA-Z0-9_./-]+' 2>/dev/null | head -1 | sed 's/^[>[:space:]]*//')
-# 只当目标路径是相对路径、非 fd 描述符、且包含字母（看起来像文件名）时拦截
-if [[ -n "$DEST_PATH" ]] && [[ "$DEST_PATH" != /* ]] && [[ "$DEST_PATH" != &* ]] && [[ "$DEST_PATH" =~ [a-zA-Z] ]]; then
+DEST_PATH=$(echo "$TOOL_INPUT" | grep -oE '(>|>>)[[:space:]]*[a-zA-Z0-9_./-]+\.[a-z]{2,4}([[:space:]]|$)' 2>/dev/null | head -1 | sed 's/^[>[:space:]]*//')
+if [[ -n "$DEST_PATH" ]] && [[ "$DEST_PATH" != /* ]]; then
     BLOCKED=true
     BLOCK_REASON="检测到在仓库目录内创建文件：$DEST_PATH。临时文件统一使用 /tmp 目录。"
 fi
