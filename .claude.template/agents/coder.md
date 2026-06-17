@@ -16,6 +16,12 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 
 ## 职责（按顺序）
 
+0. **验证并确保基线干净（重中之重）**：在开始任何修改前，先检查 `runtime/states/objective.json` 的 `project_root` 指向的仓库。
+   - 调用 `runtime/scripts/coding/revert_to_baseline.sh runtime` 将 project_root 重置到基线 commit。
+   - 如果脚本输出"已在基线 commit"，说明代码干净，直接进入下一步。
+   - 如果脚本报错或无 baseline.json，说明是首轮实验，从头开始。
+   - **🔴 严禁在非基线的代码上直接实施修改**——之前被拒实验的代码残留会污染本次实验，导致正交性失效和假阳性评估。
+
 1. 读取 summarizer 产出的 decision（票选最高的方法），据此修改研究仓库代码。
 2. 在本地执行**冒烟测试**，确认改动可跑通。
 3. 调用 `runtime/scripts/training/generate_launch.sh` 生成**真实的训练启动脚本**。

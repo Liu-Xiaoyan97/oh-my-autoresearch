@@ -171,6 +171,9 @@
       ⚠ **注意**：exploration 事件已被自动发射，**不要**再手动调 emit_event.py。
       （**remote 模式**：coder 先调用 `commit_changes.sh` 在本地 project_root 仓库提交（取真实 SHA），
       再执行 `copy_to_remote.sh` 将代码覆盖到远端。commit_id 为 `commit_changes.sh` 回显的真实 SHA。）
+	      ⚠ 所有修改必须基于干净基线：Phase 0 已执行 revert_to_baseline.sh，
+	      coder 也会在 Step 0 中再次验证。严禁在受污染代码上直接修改。
+
    d. **所有 subagent 销毁后 → 状态 6**：
       - **remote=false（本地）**：ssh 登录跳板机、从远程仓库同步代码；写日志"代码上传成功"。
       - **remote=true**：代码已由 coder 的 `copy_to_remote.sh` 覆盖上传，无需再次同步；写日志
@@ -180,7 +183,7 @@
    **恢复守卫**：当 `current_step ∈ {3,4,5}` 时，team-lead 检查该步对应的下一个一级
    嵌套 subagent 是否存在，不存在则补拉，保证管线跨会话/重启可续：
    - `current_step=3` ⇒ 拉起 `summarizer`（产出状态 4）。
-   - `current_step=4` ⇒ 拉起 `coder`（产出状态 5）。
+   - `current_step=4` ⇒ 先运行 `revert_to_baseline.sh runtime` 确保基线干净，再拉起 `coder`（产出状态 5）。
    - `current_step=5` ⇒ 无嵌套 agent，直接执行 ssh 同步（产出状态 6）。
 4. 若进入训练阶段（`current_step=6` → 7 → 8）。**先判断 `objective.remote`**：
    - `remote=true` → 走下方 **4'. 远程训练分支**（train_on_remote + query_from_remote）。
