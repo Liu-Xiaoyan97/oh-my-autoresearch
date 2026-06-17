@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# 不使用 set -e：守卫采用显式 exit 控制，避免子 shell 中 set -e 导致无声退出
+set -uo pipefail
 
 # pre-tool-use.sh - 工具调用前拦截器
 #
