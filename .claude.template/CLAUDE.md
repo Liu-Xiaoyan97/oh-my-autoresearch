@@ -97,6 +97,12 @@
    这样 agent prompt 中的 `${goal}` 在运行时被解析为实际目标值，
    修改 `objective.json["goal"]` 无需同步修改任何 prompt 文件。
 
+   **基线代码重置**：在 spawn 任何第一层 subagent 之前，
+   运行 `runtime/scripts/coding/revert_to_baseline.sh runtime`，
+   将 `project_root` 重置到 baseline.json 记录的基线 commit。
+   确保每轮实验在干净的基线代码上进行，不被之前被拒实验的代码修改污染。
+   若 baseline.json 不存在、无 commit_id 或 project_root 无 git 仓库则跳过。
+
 3. 若进入 Phase 1（方向探索 → 票选 → 代码 → 同步），team-lead 创建**嵌套结构**的
    subagent，并**串行**驱动三个第一层 subagent：`orthogonal-direction-scout` →
    `summarizer` → `coder`。scout 与 summarizer 各自用 `Task` **并行**嵌套 spawn 第二层

@@ -57,6 +57,26 @@ def write(runtime_root: str, payload: dict) -> bool:
             except Exception:
                 pass  # 解析失败不影响主流程
 
+        # commit_id 自动解析：update_baseline 时从 exploration 表的 commit 列读取（文件优先）
+        if action == "update_baseline" and isinstance(data, dict):
+            commit_id = data.get("commit_id", "")
+            if not commit_id:
+                try:
+                    db_path = Path(runtime_root) / DB_PATH
+                    if db_path.exists():
+                        conn = sqlite3.connect(str(db_path))
+                        row = conn.execute(
+                            'SELECT "commit" FROM exploration WHERE exp_name = ?',
+                            (data.get("exp_name", ""),),
+                        ).fetchone()
+                        conn.close()
+                        if row and row[0]:
+                            commit_id = row[0]
+                except Exception:
+                    pass
+            if commit_id:
+                data = {**data, "commit_id": commit_id}
+
     knowledge_dir = Path(runtime_root) / "knowledges"
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     if target_file not in {"baseline.json", "learned.json", "rejected.json"}:
