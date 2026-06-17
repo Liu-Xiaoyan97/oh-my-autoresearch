@@ -146,7 +146,8 @@
       "scripts/utils/save_json.py",
       "scripts/utils/jsonl.py",
       "scripts/utils/path_resolve.py",
-      "scripts/utils/ssh_chain.py"
+      "scripts/utils/ssh_chain.py",
+      "scripts/observe_db.py"
     ]
   },
   "install_targets": {
