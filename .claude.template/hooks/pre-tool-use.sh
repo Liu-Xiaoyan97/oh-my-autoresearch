@@ -88,6 +88,41 @@ if echo "$TOOL_INPUT" | grep -qiE '"description"' 2>/dev/null && \
     BLOCK_REASON="Agent 调用必须指定 subagent_type（已注册类型：orthogonal-direction-scout、summarizer、coder、flow-arch-reviewer、math-theorist、numerical-debugger）。省略 subagent_type 会默认降级到 general-purpose，这是被禁止的。"
 fi
 
+# ── 守卫 7: 拦截 Write/Edit 写入非 project/ 路径（剥夺 team-lead 直接写权）──
+# CLAUDE.md: "team-lead 没有任何直接写权：不使用 Write / Edit 落盘"
+# 仅 coder 可写 project/ 下的被优化项目代码；其它所有路径（runtime/、.claude/、
+# 根目录 JSON、agent-system/ 等）禁止直接写入。
+# 检测 Write 工具：有 file_path + content
+# 检测 Edit 工具：有 file_path + new_string + old_string
+# 排除 Read 工具：有 file_path 但无 content/new_string
+TOOL_HAS_FILEPATH=$(echo "$TOOL_INPUT" | grep -cE '"file_path"[[:space:]]*:' 2>/dev/null || true)
+TOOL_HAS_CONTENT=$(echo "$TOOL_INPUT" | grep -cE '"content"[[:space:]]*:' 2>/dev/null || true)
+TOOL_HAS_NEWSTR=$(echo "$TOOL_INPUT" | grep -cE '"new_string"[[:space:]]*:' 2>/dev/null || true)
+
+IS_WRITE=false
+IS_EDIT=false
+if [[ "$TOOL_HAS_FILEPATH" -gt 0 ]] && [[ "$TOOL_HAS_CONTENT" -gt 0 ]]; then
+    IS_WRITE=true
+fi
+if [[ "$TOOL_HAS_FILEPATH" -gt 0 ]] && [[ "$TOOL_HAS_NEWSTR" -gt 0 ]]; then
+    IS_EDIT=true
+fi
+
+if [[ "$IS_WRITE" == "true" ]] || [[ "$IS_EDIT" == "true" ]]; then
+    WRITE_PATH=$(echo "$TOOL_INPUT" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | grep -oE '"[^"]*"$' | tr -d '"' 2>/dev/null || true)
+    if [[ -n "$WRITE_PATH" ]]; then
+        # 允许的路径前缀：/project/（被优化项目目录）
+        ALLOWED=false
+        case "$WRITE_PATH" in
+            */project/*) ALLOWED=true ;;
+        esac
+        if [[ "$ALLOWED" != "true" ]]; then
+            BLOCKED=true
+            BLOCK_REASON="检测到禁止的直接写入操作（路径: $WRITE_PATH）。CLAUDE.md 规定 team-lead 没有任何直接写权，只能通过 observer event 持久化。仅有 coder 可向 project/ 下写入被优化项目代码。"
+        fi
+    fi
+fi
+
 if [[ "$BLOCKED" == "true" ]]; then
     echo "[pre-tool-use] ⛔ 拦截: $BLOCK_REASON" >&2
     exit 1
