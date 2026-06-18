@@ -23,7 +23,6 @@ fi
 python3 -c "
 import json, sys
 
-valid = {'sonnet', 'opus', 'haiku', 'fable'}
 subagent = '${SUBAGENT}'
 
 try:
@@ -31,14 +30,12 @@ try:
     models = obj.get('model', {})
     if isinstance(models, str):
         # 兼容旧格式：model 为单个字符串时作为所有 subagent 的模型
-        model = models.strip().lower()
-        print(model if model in valid else 'haiku')
+        model = models.strip()
+        print(model.lower() if model else 'haiku')
     elif isinstance(models, dict):
-        model = models.get(subagent) or models.get('default', 'haiku')
-        if isinstance(model, str) and model.strip().lower() in valid:
-            print(model.strip().lower())
-        else:
-            print('haiku')
+        model = (models.get(subagent) or models.get('default') or 'haiku')
+        model = model.strip() if isinstance(model, str) else 'haiku'
+        print(model.lower() if model else 'haiku')
     else:
         print('haiku')
 except Exception:
