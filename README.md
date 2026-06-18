@@ -483,6 +483,99 @@ emit_event.py → events.jsonl → offset-based consume → dispatch → writer 
 | `knowledge` | `write_knowledge.py` | `knowledges/baseline.json` / `learned.json` / `rejected.json` | 经验知识库写入 |
 | `control` | 自治处理（不进 writer） | 自清 | `action=reset` 清空 events/offsets/run |
 
+#### 用自然语言描述提交事件
+
+在 Claude Code 中，team-lead 不需要手动拼写 JSON payload——可以直接**用自然语言描述意图**，
+team-lead 会将其翻译为对应的 `emit_event.py` 调用。以下是 5 种事件类型的自然语言示例：
+
+**1. `log` — 记录运行日志**
+
+> "记录一条 info 日志：正交候选集生成完成，当前共 6 个候选方法"
+
+对应执行：
+```bash
+python3 runtime/observer/scripts/ingest/emit_event.py log \
+  '{"level":"INFO","message":"正交候选集生成完成，当前共 6 个候选方法","source":"team-lead"}' runtime
+```
+
+**2. `experiments` — 写入训练指标**
+
+> "记录 exp_12 step 50 的验证指标：train_loss=7.22, val_loss=6.60"
+
+对应执行：
+```bash
+python3 runtime/observer/scripts/ingest/emit_event.py experiments \
+  '{"action":"update_metric","exp_name":"exp_12","data":{"train_step":50,"train_loss":7.22,"val_step":50,"val_metric":6.60}}' runtime
+```
+
+> "exp_13 训练完成，标记为 completed，最终 val_loss=5.88"
+
+对应执行：
+```bash
+python3 runtime/observer/scripts/ingest/emit_event.py experiments \
+  '{"action":"mark_complete","exp_name":"exp_13","data":{"train_loss":6.1,"val_metric":5.88}}' runtime
+```
+
+> "创建 exp_13 的实验行，状态设为 running"
+
+对应执行：
+```bash
+python3 runtime/observer/scripts/ingest/emit_event.py experiments \
+  '{"action":"insert_experiment","exp_name":"exp_13","status":"running"}' runtime
+```
+
+**3. `state` — 推进状态机**
+
+> "推进状态机：current_step=3, next_step=4, iteration=7, exp_name=exp_7"
+
+对应执行：
+```bash
+python3 runtime/observer/scripts/ingest/emit_event.py state \
+  '{"current_step":3,"next_step":4,"iteration":7,"exp_name":"exp_7"}' runtime
+```
+
+> ⚠ `state` 事件是唯一 payload 不可省略字段的事件——必须明确给出 `current_step`/`next_step`/`iteration`/`exp_name`。
+
+**4. `knowledge` — 写入经验知识库**
+
+> "exp_12 的 val_loss=6.02 优于基线 5.98，改善 0.04 但未达 0.1 阈值，记入 rejected：输出嵌入层梯度重平衡未达标"
+
+对应执行：
+```bash
+python3 runtime/observer/scripts/ingest/emit_event.py knowledge \
+  '{"action":"append_rejected","exp_name":"exp_12","data":{"method_summary":"输出嵌入层梯度重平衡(学习率乘子0.3)","reason":"val_loss=6.0249 劣于基线(5.9791)，退化+0.0458被否决。代码中 weight tying 双倍更新 bug 污染了所有历史实验。"}}' runtime
+```
+
+> "exp_0 成为新的基线方法，val_loss=5.98, 方法 Label Smoothing(ε=0.1)，更新 learned 和 baseline"
+
+对应执行（两步）：
+```bash
+python3 runtime/observer/scripts/ingest/emit_event.py knowledge \
+  '{"action":"append_learned","exp_name":"exp_0","data":{"method_summary":"Label Smoothing (ε=0.1)","reason":"exp_0 首次 baseline 启动"}}' runtime
+
+python3 runtime/observer/scripts/ingest/emit_event.py knowledge \
+  '{"action":"update_baseline","exp_name":"exp_0","data":{"method_summary":"Label Smoothing (ε=0.1)","val_loss":5.9791}}' runtime
+```
+
+**5. `exploration` — 记录探索数据（通常自动发射，手动补发时参考）**
+
+> "记录 exp_13 的决策结果：选中的是 Gradient Accumulation(x4)，原因是架构和数学评审评分最高"
+
+手动补发时对应执行：
+```bash
+python3 runtime/observer/scripts/ingest/emit_event.py exploration \
+  '{"action":"update_decision","exp_name":"exp_13","data":{"decision":"Gradient Accumulation (x4) with Token-Level Loss Normalization","reason":"architecture reviewer 5/5, math theorist 4/5, numerical debugger 4/5 总分最高"}}' runtime
+```
+
+> ⚠ 在正常管线中，`exploration` 与 `candidate_pool` 事件由 `validate_subagent_result.py` 在 subagent 返回时自动发射，手动补发射只应在训练日志重新解析等少数场景进行。
+
+**常见误区与避坑：**
+
+- **不需要记 schema**：用自然语言告诉 Claude Code "记录 exp_13 的 step 50 指标：val_loss=5.8"，它会自动翻译为正确的 `experiments update_metric` 事件
+- **`exp_name` 自动填充**：大多数 writer 优先从 `states.json` 读取当前 `exp_name`，自然语言中可省略
+- **避免重复发射**：`monitor_training.py` 有 `.emitted_eval_steps.json` 去重追踪，重复发射不会覆盖已有值但会浪费事件轨道
+- **不要手动写 `update_baseline`**：这是 Phase 9 经验回收的唯一结果，team-lead 在阈值判断后通过 `knowledge` 事件决定，不要在 Phase 9 之前手动更新 baseline
+
 #### 关键设计
 
 - **文件优先**（`file-first`）：所有 writer 优先从权威文件读取上下文参数（如 `exp_name`
