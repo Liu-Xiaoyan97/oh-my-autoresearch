@@ -92,9 +92,9 @@
    - 载入历史经验（读取 knowledges/baseline.json、learned.json、rejected.json 构建 prompt 上下文），然后 emit `state` 事件推进：`current_step=1, next_step=2, iteration=<当前 iteration>, exp_name=<当前 exp_name>`。
    - 然后进入 Phase 1 方向探索。
 
-   **${goal} 解析**：spawn 任何第一层 subagent 时，
-   将 `{{goal}}` 作为 `${goal}` 上下文传入。
-   修改 `objective.json["goal"]` 后需重启 session。
+   **${goal} 解析**：subagent .md 中的 `{{goal}}` 已由模板自动填充。
+   Phase 9 需从 goal 文本解析改进阈值（查找"至少"/"≥"等关键字）。
+   修改 `objective.json["goal"]` 后需重启 session 使其生效。
 
    **基线代码重置**：spawn 任何第一层 subagent 前，
    运行 `runtime/scripts/coding/revert_to_baseline.sh runtime`，
