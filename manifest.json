@@ -147,8 +147,7 @@
       "scripts/utils/jsonl.py",
       "scripts/utils/path_resolve.py",
       "scripts/utils/ssh_chain.py",
-      "scripts/utils/resolve_goal.sh",
-      "scripts/utils/resolve_poll_interval.sh",
+      "scripts/utils/resolve_templates.sh",
       "scripts/utils/resolve_model.sh",
       "scripts/observe_db.py"
     ]

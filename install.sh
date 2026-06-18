@@ -30,12 +30,14 @@ echo "=== oh-my-autoresearch 安装 ==="
 echo "子模块目录: $SCRIPT_DIR"
 echo "宿主仓库:   $HOST_ROOT"
 
-# ---------- 助手：安装 manifest 中列出的文件（强制覆盖）----------
+# ---------- 助手：安装 manifest 中列出的文件 ----------
+# 第四个参数可选：设为 "runtime" 启用历史数据保护（已存在不覆盖）
 install_files_from_manifest() {
     local field="$1"        # manifest JSON 中的字段名，如 "files"
     local section="$2"      # manifest JSON 中的 section，如 "claude_template" / "runtime_template"
     local src_root="$3"     # 源根目录
     local dst_root="$4"     # 目标根目录
+    local protect="${5:-}"  # 设为 "runtime" 启用保护
 
     # 用 python3 解析 manifest，避免复杂 bash JSON 解析
     python3 -c "
@@ -55,6 +57,28 @@ except Exception as e:
             echo "  警告: 源文件不存在，跳过: ${rel}"
             continue
         fi
+
+        # 保护：当目标文件已存在时，跳过历史数据目录
+        if [[ "$protect" == "runtime" && -f "$to" ]]; then
+            local skip=false
+            case "$rel" in
+                db/*|knowledges/*|states/*)
+                    skip=true
+                    ;;
+                observer/*)
+                    # observer/schemas 和 observer/scripts 例外，允许覆盖
+                    case "$rel" in
+                        observer/schemas/*|observer/scripts/*) ;;
+                        *) skip=true ;;
+                    esac
+                    ;;
+            esac
+            if $skip; then
+                echo "  跳过 (历史数据已存在): ${rel}"
+                continue
+            fi
+        fi
+
         mkdir -p "$(dirname "$to")"
         cp "$from" "$to"
         echo "  安装: ${rel}"
@@ -68,12 +92,12 @@ echo ""
 echo "→ 安装 .claude.template 文件到 $CLAUDE_DST ..."
 install_files_from_manifest "files" "claude_template" "$CLAUDE_SRC" "$CLAUDE_DST"
 
-# 2. 安装 runtime.template → runtime（manifest 列表 + 强制覆盖）
+# 2. 安装 runtime.template → runtime（manifest 列表，历史数据不覆盖）
 RUNTIME_SRC="$SCRIPT_DIR/runtime.template"
 RUNTIME_DST="$HOST_ROOT/runtime"
 echo ""
 echo "→ 安装 runtime.template 文件到 $RUNTIME_DST ..."
-install_files_from_manifest "files" "runtime_template" "$RUNTIME_SRC" "$RUNTIME_DST"
+install_files_from_manifest "files" "runtime_template" "$RUNTIME_SRC" "$RUNTIME_DST" "runtime"
 
 # 3. 安装 hooks（manifest 中的 hooks 文件也会被上面的 claude_template.files 覆盖，这里单独处理钩子注册）
 echo ""
