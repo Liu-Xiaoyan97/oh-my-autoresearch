@@ -87,8 +87,6 @@
      `<project_root>/launchscripts/{copy_to_remote,train_on_remote,query_from_remote}.sh`；
      再调用 `runtime/scripts/validate/validate_remote.py runtime` 校验 hosts 非空且 ssh 链可达。
      校验不通过则记录 observer log 并暂停，不进入迭代。
-   - **模型配置填充（bootstrap 阶段）**：调用 `runtime/scripts/utils/apply_model_config.sh runtime`，
-     从 `objective.json["model"]` 填充 `.claude/agents/*.md` 的 model 字段。幂等可重复。
    - 通过 observer 写入启动校验、校验通过或错误日志。
    - Phase 0 校验通过后，emit `state` 事件推进状态：`current_step=0, next_step=1, iteration=<当前 iteration>, exp_name=<当前 exp_name>`。
    - 载入历史经验（读取 knowledges/baseline.json、learned.json、rejected.json 构建 prompt 上下文），然后 emit `state` 事件推进：`current_step=1, next_step=2, iteration=<当前 iteration>, exp_name=<当前 exp_name>`。
@@ -99,13 +97,6 @@
    的值，将其注入 subagent 的上下文参数中以替换 `${goal}` 占位符。
    这样 agent prompt 中的 `${goal}` 在运行时被解析为实际目标值，
    修改 `objective.json["goal"]` 无需同步修改任何 prompt 文件。
-
-   - **模型配置填充（bootstrap 阶段）**：调用 `runtime/scripts/utils/apply_model_config.sh runtime`，
-     从 `objective.json["model"]` 字典中读取各 subagent 对应的模型值，直接写入
-     `.claude/agents/<name>.md` 的 `model:` 字段（替换 `$(resolve_model.sh ...)` 占位符）。
-     agent .md 的 model 字段在 bootstrap 后即为最终生效的模型标识，
-     spawn subagent 时 **不传** `Agent tool` 的 `model` 参数，由 .md 定义直接控制。
-     幂等可重复（仅首次运行时替换占位符，后续无占位符则跳过）。
 
    **基线代码重置**：在 spawn 任何第一层 subagent 之前，
    运行 `runtime/scripts/coding/revert_to_baseline.sh runtime`，
