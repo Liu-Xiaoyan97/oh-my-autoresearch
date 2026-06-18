@@ -563,6 +563,10 @@ ruff check .
 - **subagent 约束**：只能使用 `.claude/agents/` 注册的 6 种 subagent，严禁降级到通用 agent
 - **远程训练**：通过 `ssh_chain.py` 支持 SSH 链式跳板机连接
 
+## TODO
+- [x] 自动化优化神经网络模型
+- [ ] agents联网获取候选
+- [ ] 增加best代码自动化论文写作
 
 ## QQ交流群
 ![qq群](assets/qrcode_1781765868615.jpg)
