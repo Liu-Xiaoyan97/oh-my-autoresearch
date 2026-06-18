@@ -536,7 +536,7 @@ session-start 时由模板系统自动注入到 `.claude/agents/*.md` 的 `model
 
 - `default`：未单独指定的 subagent 使用的兜底模型
 - 可按 subagent name 逐个指定（名称必须匹配已注册的 6 个 subagent）
-- 可用模型标识：`claude-sonnet-4-6`、`claude-haiku-4-5-20251001`、`claude-opus-4-8`、`claude-deepseek-4-flash` 等
+- 可用模型标识：使用Claude Code CLI中可以被发现的模型，此处`claude-*`多api模型统一管理通过litellm实现，并在Claude Code CLI中启用了模型发现。
 - 修改后**需重启 session** 使模板重新解析生效
 - 模型设置只影响 subagent 调用，不影响 Claude Code 主对话使用的模型
 
