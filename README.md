@@ -540,6 +540,11 @@ session-start 时由模板系统自动注入到 `.claude/agents/*.md` 的 `model
 - 修改后**需重启 session** 使模板重新解析生效
 - 模型设置只影响 subagent 调用，不影响 Claude Code 主对话使用的模型
 
+> 💡 **模型推荐**：建议使用能力在 `deepseek-v4-flash` 及以上级别的模型。
+> 当前版本已尽可能剥离 Agent 的能力，通过大量脚本降低不确定性，但仍对 LLM 的工具调度能力有一定要求。
+> 整个开发流程都是在 `deepseek-v4-flash` 上进行的，已经得到较为稳定的版本。
+> 如果感觉系统运行不稳定，请切换至智力不低于 `deepseek-v4-flash` 的模型。
+
 ## 注意事项
 
 - **写权限约束**：team-lead 不能直接 Write/Edit 文件，所有持久化通过 observer event 完成
