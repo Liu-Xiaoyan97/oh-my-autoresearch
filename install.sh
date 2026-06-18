@@ -99,7 +99,14 @@ echo ""
 echo "→ 安装 runtime.template 文件到 $RUNTIME_DST ..."
 install_files_from_manifest "files" "runtime_template" "$RUNTIME_SRC" "$RUNTIME_DST" "runtime"
 
-# 3. 安装 hooks（manifest 中的 hooks 文件也会被上面的 claude_template.files 覆盖，这里单独处理钩子注册）
+# 3. 安装根目录文件 → 宿主仓库根目录（manifest root_files 列表 + 强制覆盖）
+ROOT_SRC="$SCRIPT_DIR"
+ROOT_DST="$HOST_ROOT"
+echo ""
+echo "→ 安装根目录文件到 $ROOT_DST ..."
+install_files_from_manifest "files" "root_files" "$ROOT_SRC" "$ROOT_DST"
+
+# 4. 安装 hooks（manifest 中的 hooks 文件也会被上面的 claude_template.files 覆盖，这里单独处理钩子注册）
 echo ""
 echo "→ 设置 hook 执行权限 ..."
 find "$CLAUDE_DST/hooks" -name "*.sh" -exec chmod +x {} + 2>/dev/null || true

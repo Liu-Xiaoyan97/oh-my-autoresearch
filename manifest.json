@@ -157,6 +157,16 @@
       "scripts/observe_db.py"
     ]
   },
+  "root_files": {
+    "source": ".",
+    "target": "",
+    "files": [
+      "README.md",
+      "assets/architecture.png",
+      "assets/oh-my-autoresearch.png",
+      "assets/qrcode_1781765868615.jpg"
+    ]
+  },
   "install_targets": {
     "claude_target": ".claude/",
     "runtime_target": "runtime/"
