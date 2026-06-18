@@ -53,6 +53,76 @@ EMIT_MAP = {
 # candidate_pool 自动发射映射 —— 在 exploration 事件之后额外发射
 # 值格式: (event_type, payload_template_builder(data, runtime_root) -> dict | None)
 # 返回 None 表示跳过
+# ── known_filter: 正交候选安全删除 ─────────────────────────────────
+# 在 scout 自动发射前，过滤掉与 rejected/learned 中 method_summary
+# 精确匹配的候选，防止已被否决或已学习的候选重新进入实验管线。
+# 这层校验独立于 LLM 的"去重"prompt 指令，作为硬安全网存在。
+_KNOWN_PATH_MAP = {
+    "rejected": "knowledges/rejected.json",
+    "learned": "knowledges/learned.json",
+}
+
+
+def _load_known_methods(runtime_root: str) -> set[str]:
+    """读取 rejected.json 和 learned.json，返回已知的 method_summary 集合。
+
+    learned.json 中 method_summary 可能被多余引号包裹（如 '"Label Smoothing"'），
+    统一 strip 掉首尾的引号后再匹配。
+    """
+    known: set[str] = set()
+    for key, rel_path in _KNOWN_PATH_MAP.items():
+        path = Path(runtime_root) / rel_path
+        if not path.exists():
+            continue
+        try:
+            entries = json.loads(path.read_text(encoding="utf-8"))
+            for entry in entries:
+                summary = entry.get("method_summary", "")
+                if not summary:
+                    continue
+                # strip 首尾引号：'"Label Smoothing"' → 'Label Smoothing'
+                cleaned = summary.strip('"').strip("'")
+                if cleaned:
+                    known.add(cleaned)
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return known
+
+
+def _filter_known_candidates(data: dict, runtime_root: str) -> dict:
+    """剔除 data['candidates'] 中与 rejected/learned method_summary
+    精确匹配的候选。修改 data 就地并返回筛选报告。"""
+    known = _load_known_methods(runtime_root)
+    if not known:
+        return {"filtered": [], "count": 0}
+
+    candidates = data.get("candidates", [])
+    if not isinstance(candidates, list):
+        return {"filtered": [], "count": 0}
+
+    before = len(candidates)
+    filtered_names: list[str] = []
+    keep: list[dict] = []
+    for c in candidates:
+        name = c.get("name", "") if isinstance(c, dict) else ""
+        if name in known:
+            filtered_names.append(name)
+        else:
+            keep.append(c)
+
+    if keep:
+        data["candidates"] = keep
+    else:
+        # 全部被过滤 → 保留空的 candidates 数组（后续 auto_emit 仍可正常返回空数组）
+        data["candidates"] = []
+
+    return {
+        "filtered": filtered_names,
+        "count": before - len(keep),
+    }
+
+
+# ── 自动发射映射 ──────────────────────────────────────────────────
 CANDIDATE_POOL_EMIT_MAP = {
     "orthogonal-direction-scout": {
         1: lambda data, root: _build_candidate_pool_update(data),
@@ -320,6 +390,19 @@ def validate(agent_name: str, phase: int, json_source: str, runtime_root: str) -
     try:
         jsonschema.validate(instance=data, schema=schema)
         result = {"valid": True, "schema": str(schema_path)}
+
+        # ── 安全网：剔除与 rejected/learned 精确匹配的候选 ──
+        # 仅适用于 orthogonal-direction-scout phase=1
+        known_filter_result = None
+        if agent_name == "orthogonal-direction-scout" and phase == 1:
+            known_filter_result = _filter_known_candidates(data, runtime_root)
+            result["known_filtered"] = known_filter_result
+            if known_filter_result["count"] > 0:
+                names = ", ".join(known_filter_result["filtered"])
+                print(
+                    f"[known_filter] 安全网剔除 {known_filter_result['count']} 个已知候选: {names}",
+                    file=sys.stderr,
+                )
 
         # ── 校验通过，自动发射事件 ──
         emit_result = _auto_emit(agent_name, phase, data, runtime_root)
