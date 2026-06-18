@@ -540,19 +540,6 @@ session-start 时由模板系统自动注入到 `.claude/agents/*.md` 的 `model
 - 修改后**需重启 session** 使模板重新解析生效
 - 模型设置只影响 subagent 调用，不影响 Claude Code 主对话使用的模型
 
-## 开发
-
-```bash
-# 安装开发依赖
-uv sync --group dev
-
-# 运行测试
-pytest
-
-# 代码检查
-ruff check .
-```
-
 ## 注意事项
 
 - **写权限约束**：team-lead 不能直接 Write/Edit 文件，所有持久化通过 observer event 完成
