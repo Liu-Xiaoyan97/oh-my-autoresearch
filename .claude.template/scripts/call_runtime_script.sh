@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_ROOT="${SCRIPT_DIR}/../../runtime"
+PYTHON="$(cd "$SCRIPT_DIR/../.." && pwd)/.venv/bin/python3"
 SCRIPT_NAME="${1:-}"
 shift || true
 
@@ -30,7 +31,7 @@ EXIT_CODE=$?
 set -e
 
 # 返回统一 tool-result JSON
-python3 - "$SCRIPT_PATH" "$EXIT_CODE" "$STDOUT_FILE" "$STDERR_FILE" <<'PY'
+"$PYTHON" - "$SCRIPT_PATH" "$EXIT_CODE" "$STDOUT_FILE" "$STDERR_FILE" <<'PY'
 import json
 import sys
 from pathlib import Path

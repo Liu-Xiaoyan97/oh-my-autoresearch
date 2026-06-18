@@ -24,7 +24,31 @@ REVIEWER_ROLES = {
     "numerical-debugger",
 }
 RECOVERY_PHASE_PATTERN = re.compile(r"(?:\[phase=9\]|phase\s*[=:]\s*9)", re.IGNORECASE)
-DEFAULT_HEARTBEAT_TIMEOUT = 300
+
+FIRST_LAYER_ROLES = {
+    "orthogonal-direction-scout",
+    "summarizer",
+    "coder",
+}
+
+
+def _resolve_heartbeat_interval() -> int:
+    """从 runtime/states/objective.json 读取 subagent_heartbeat_interval。
+
+    脚本在 .claude/scripts/subagent_supervisor.py，
+    runtime 在项目根下的 runtime/。
+    """
+    script = Path(__file__).resolve()
+    objective = script.parents[2] / "runtime" / "states" / "objective.json"
+    try:
+        obj = json.loads(objective.read_text(encoding="utf-8"))
+        val = obj.get("subagent_heartbeat_interval", 300)
+        return int(val) if val else 300
+    except Exception:
+        return 300
+
+
+DEFAULT_HEARTBEAT_TIMEOUT = _resolve_heartbeat_interval()
 DEFAULT_POLL_INTERVAL = 15
 DEFAULT_MAX_ATTEMPTS = 2
 
@@ -93,6 +117,29 @@ def _save(path: Path, data: dict[str, Any]) -> None:
         encoding="utf-8",
     )
     os.replace(tmp, path)
+
+
+def _clean_records_for_parent(parent_agent_id: str) -> None:
+    """删除指定父 agent 下所有 reviewer 子记录。
+
+    通过比对 reviewer 记录的 parent_transcript 重建父目录名，
+    与父 agent 的 agent_id 配对后找到目标目录删除。
+    """
+    root = _state_root()
+    if not root.exists():
+        return
+    import shutil
+
+    to_delete: set[Path] = set()
+    for path, data in _all_records():
+        if data.get("role") in REVIEWER_ROLES:
+            parent_transcript = data.get("parent_transcript", "")
+            expected_key = _safe_key(parent_transcript, parent_agent_id)
+            if expected_key == path.parent.name:
+                to_delete.add(path.parent)
+    for dir_path in to_delete:
+        if dir_path.exists():
+            shutil.rmtree(dir_path)
 
 
 def _all_records() -> Iterator[tuple[Path, dict[str, Any]]]:
@@ -308,6 +355,12 @@ def _handle_post_tool(event: dict[str, Any], failed: bool = False) -> int:
     tool_input = event.get("tool_input") or {}
     role = tool_input.get("subagent_type") or tool_input.get("subagentType")
     if role not in REVIEWER_ROLES:
+        # 第一层 agent（scout/summarizer/coder）结束后清理其下所有 subagent 记录
+        if role in FIRST_LAYER_ROLES:
+            response = event.get("tool_response")
+            parent_agent_id = _extract_agent_id(response) or ""
+            if parent_agent_id:
+                _clean_records_for_parent(parent_agent_id)
         return 0
 
     found = _find_record(
@@ -440,6 +493,12 @@ def command_wait(args: argparse.Namespace) -> int:
         time.sleep(args.poll)
 
 
+def command_clean(args: argparse.Namespace) -> int:
+    _clean_records_for_parent(args.agent_id)
+    print(json.dumps({"cleaned": True, "agent_id": args.agent_id}))
+    return 0
+
+
 def command_retry(args: argparse.Namespace) -> int:
     path, data = _status(args.agent_id, args.timeout)
     if data.get("status") not in {"failed", "stale", "completed"}:
@@ -478,6 +537,10 @@ def build_parser() -> argparse.ArgumentParser:
     retry.add_argument("--reason", required=True)
     retry.add_argument("--timeout", type=int, default=DEFAULT_HEARTBEAT_TIMEOUT)
     retry.set_defaults(func=command_retry)
+
+    clean = subparsers.add_parser("clean")
+    clean.add_argument("--agent-id", required=True)
+    clean.set_defaults(func=command_clean)
     return parser
 
 

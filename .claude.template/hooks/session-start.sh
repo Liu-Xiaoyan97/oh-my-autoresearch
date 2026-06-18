@@ -5,12 +5,13 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_ROOT="${SCRIPT_DIR}/../../runtime"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PYTHON="${PROJECT_ROOT}/.venv/bin/python3"
 
 # Step 0a: 生成 paths.json（路径配置，供模板占位符使用）
 PATHS_FILE="$RUNTIME_ROOT/paths.json"
 mkdir -p "$(dirname "$PATHS_FILE")"
 export PROJECT_ROOT
-python3 << PYEOF
+"$PYTHON" << PYEOF
 import json, os
 
 project = os.environ.get('PROJECT_ROOT', '')
@@ -55,7 +56,7 @@ _check_health() {
     if [[ ! -f "$STATUS_FILE" ]]; then
         return 1
     fi
-    python3 -c "
+    "$PYTHON" -c "
 import json, time
 try:
     s = json.load(open('$STATUS_FILE'))

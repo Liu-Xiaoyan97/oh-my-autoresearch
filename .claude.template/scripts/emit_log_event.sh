@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_ROOT="${SCRIPT_DIR}/../../runtime"
+PYTHON="$(cd "$SCRIPT_DIR/../.." && pwd)/.venv/bin/python3"
 
 LEVEL="${1:-INFO}"
 MESSAGE="${2:-}"
@@ -16,7 +17,7 @@ if [[ -z "$MESSAGE" ]]; then
     exit 1
 fi
 
-PAYLOAD="$(python3 - "$LEVEL" "$MESSAGE" "$SOURCE" "$RUNTIME_ROOT" <<'PY'
+PAYLOAD="$("$PYTHON" - "$LEVEL" "$MESSAGE" "$SOURCE" "$RUNTIME_ROOT" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -41,4 +42,4 @@ print(json.dumps({
 PY
 )"
 
-python3 "$RUNTIME_ROOT/observer/scripts/ingest/emit_event.py" log "$PAYLOAD" "$RUNTIME_ROOT"
+"$PYTHON" "$RUNTIME_ROOT/observer/scripts/ingest/emit_event.py" log "$PAYLOAD" "$RUNTIME_ROOT"
