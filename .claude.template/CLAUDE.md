@@ -92,9 +92,8 @@
    - 载入历史经验（读取 knowledges/baseline.json、learned.json、rejected.json 构建 prompt 上下文），然后 emit `state` 事件推进：`current_step=1, next_step=2, iteration=<当前 iteration>, exp_name=<当前 exp_name>`。
    - 然后进入 Phase 1 方向探索。
 
-   **${goal} 解析**：spawn 任何第一层 subagent 前，
-   读取 `runtime/states/objective.json["goal"]`（`{{goal}}`），
-   注入 subagent 上下文替换 `${goal}`。
+   **${goal} 解析**：spawn 任何第一层 subagent 时，
+   将 `{{goal}}` 作为 `${goal}` 上下文传入。
    修改 `objective.json["goal"]` 后需重启 session。
 
    **基线代码重置**：spawn 任何第一层 subagent 前，
