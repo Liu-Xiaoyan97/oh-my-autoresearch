@@ -26,9 +26,10 @@ def write(runtime_root: str, payload: dict) -> bool:
     }.get(action, "")
     target_file = payload.get("target_file") or default_target
     data = payload.get("data", {})
-    # exp_name 文件优先：knowledge 条目恒指向当前实验，从 states.json 权威获取
+    # exp_name 优先使用 payload 显式传入的值（避免 observer 异步消费时 states.json 已变更）
+    # 回退到 states.json 仅作为兜底
     if isinstance(data, dict):
-        resolved = states_exp_name(runtime_root) or data.get("exp_name", "")
+        resolved = data.get("exp_name", "") or states_exp_name(runtime_root)
         if resolved:
             data = {**data, "exp_name": resolved}
 

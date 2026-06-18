@@ -61,8 +61,9 @@ def _resolve_decision_name(conn, exp_name, raw_value):
 
 def write(runtime_root: str, payload: dict) -> bool:
     action = payload.get("action", "")
-    # exp_name 权威来源是 states.json，不依赖主程序在 payload 里给
-    exp_name = states_exp_name(runtime_root) or payload.get("exp_name", "")
+    # exp_name 优先使用 payload 显式传入的值（避免 observer 异步消费时 states.json 已变更）
+    # 回退到 states.json 仅作为兜底
+    exp_name = payload.get("exp_name", "") or states_exp_name(runtime_root)
     data = payload.get("data", {})
 
     conn = sqlite3.connect(_get_db_path(runtime_root))
