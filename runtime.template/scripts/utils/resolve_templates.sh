@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# resolve_templates.sh — 从 objective.json + 模板文件生成最终 CLAUDE.md 和 agents/*.md。
+# resolve_templates.sh — 从 objective.json + paths.json + 模板文件生成最终 CLAUDE.md 和 agents/*.md。
 #
 # 替换占位符：
 #   {{goal}}            → objective.json["goal"]
 #   {{poll_interval}}   → objective.json["poll_interval"]
 #   {{model.<name>}}    → objective.json["model"][<name>]
+#   {{paths.<key>}}     → paths.json[<key>]
 #
 # 在 session-start hook 中自动执行，确保每次启动配置最新。
 # 幂等可重复。
@@ -38,6 +39,7 @@ import json, os, re, sys
 runtime_root = os.environ['RUNTIME_ROOT']
 claude_dir = os.environ['CLAUDE_DIR']
 objective_file = os.path.join(runtime_root, 'states', 'objective.json')
+paths_file = os.path.join(runtime_root, 'paths.json')
 
 # 读取 objective.json
 try:
@@ -47,12 +49,20 @@ except Exception as e:
     print(f'[resolve_templates] 读取 objective.json 失败: {e}', file=sys.stderr)
     sys.exit(0)
 
+# 读取 paths.json（如存在）
+paths_map = {}
+if os.path.exists(paths_file):
+    try:
+        with open(paths_file, 'r', encoding='utf-8') as f:
+            paths_map = json.load(f)
+    except Exception as e:
+        print(f'[resolve_templates] 读取 paths.json 失败: {e}', file=sys.stderr)
+
 # 提取替换值
 goal = objective.get('goal', '')
 poll_interval = str(objective.get('poll_interval', 2))
 model_map = objective.get('model', {})
 if isinstance(model_map, str):
-    # 兼容旧格式：model 为单个字符串
     model_map = {}
 
 # 构建替换映射
@@ -63,6 +73,11 @@ replacements = {
 for key, value in model_map.items():
     if isinstance(value, str):
         replacements[f'{{{{model.{key}}}}}'] = value.strip()
+
+# 添加 paths.XXX 占位符
+for key, value in paths_map.items():
+    if isinstance(value, str):
+        replacements[f'{{{{paths.{key}}}}}'] = value
 
 # 编译正则：匹配所有 {{...}} 占位符
 placeholder_re = re.compile(r'\{\{([^}]+)\}\}')

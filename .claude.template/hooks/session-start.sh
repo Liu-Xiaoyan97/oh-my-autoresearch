@@ -1,11 +1,40 @@
 #!/usr/bin/env bash
 # session-start.sh - Claude Code session 启动时执行
-# 职责：1) 模板解析填充  2) observer sidecar 存活守卫 + 自动恢复
+# 职责：1) 生成 paths.json  2) 模板解析填充  3) observer sidecar 存活守卫 + 自动恢复
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_ROOT="${SCRIPT_DIR}/../../runtime"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Step 0: 解析模板占位符（幂等可重复）
+# Step 0a: 生成 paths.json（路径配置，供模板占位符使用）
+PATHS_FILE="$RUNTIME_ROOT/paths.json"
+mkdir -p "$(dirname "$PATHS_FILE")"
+export PROJECT_ROOT
+python3 << PYEOF
+import json, os
+
+project = os.environ.get('PROJECT_ROOT', '')
+paths = {
+    "states_json": f"{project}/runtime/states/states.json",
+    "objective_json": f"{project}/runtime/states/objective.json",
+    "baseline_json": f"{project}/runtime/knowledges/baseline.json",
+    "learned_json": f"{project}/runtime/knowledges/learned.json",
+    "rejected_json": f"{project}/runtime/knowledges/rejected.json",
+    "candidate_pool_json": f"{project}/runtime/knowledges/candidate_pool.json",
+    "db_sqlite": f"{project}/runtime/db/runtime.sqlite",
+    "logs_dir": f"{project}/runtime/logs",
+    "emit_event_py": f"{project}/runtime/observer/scripts/ingest/emit_event.py",
+    "validate_subagent_py": f"{project}/.claude/scripts/validate_subagent_result.py",
+    "revert_baseline_sh": f"{project}/runtime/scripts/coding/revert_to_baseline.sh",
+    "commit_changes_sh": f"{project}/runtime/scripts/coding/commit_changes.sh",
+    "generate_launch_sh": f"{project}/runtime/scripts/training/generate_launch.sh",
+}
+with open("$PATHS_FILE", 'w', encoding='utf-8') as f:
+    json.dump(paths, f, ensure_ascii=False, indent=2)
+print(f'[session-start] paths.json 已生成: {len(paths)} 条路径')
+PYEOF
+
+# Step 0b: 解析模板占位符（幂等可重复）
 RESOLVE_SCRIPT="$RUNTIME_ROOT/scripts/utils/resolve_templates.sh"
 if [[ -x "$RESOLVE_SCRIPT" ]]; then
     "$RESOLVE_SCRIPT" "$RUNTIME_ROOT"
