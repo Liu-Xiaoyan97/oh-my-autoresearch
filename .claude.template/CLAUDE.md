@@ -32,7 +32,6 @@
   训练入口。**严禁 team-lead 修改任何文件，也严禁要求 coder 修改 `generate_launch.sh` 或
   生成的 `launch_<exp_name>.sh`**。
 - **对 nohup 后台长任务（如训练）的"等待 / 轮询"必须用 Claude Code CLI 内部 cron（`CronCreate` 建、`CronDelete` 销）**；**严禁前台 `sleep`，以及 `sleep`+循环、`while sleep`、`sleep && ...` 等任何阻塞轮询**（此为严重违规）。
-- **但对 subagent（前台 `Task`/Agent 调用）不适用 cron**：subagent 调用本身就阻塞主程序直到它返回，主程序只需等待返回值，**不轮询、不查询、不建 cron**。cron 仅用于主程序无法靠"调用返回"感知结束的后台任务。
 
 ## 状态机
 
