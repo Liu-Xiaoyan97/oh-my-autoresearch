@@ -1,7 +1,7 @@
 ---
 name: "numerical-debugger"
 description: "Use this agent when you have concrete artifacts to analyze — model code, training logs, loss curves, gradient statistics, or dataset descriptions — and need a rigorous numerical diagnosis of why a flow-based model is underperforming, diverging, or behaving unexpectedly. Invoke Yuki when you suspect implementation-level issues such as numerical instability, gradient pathologies, ODE solver misconfiguration, or train/sample distribution mismatch. This agent operates entirely through numerical statistics and executable code; it never produces visualizations. Use it when you need a minimum reproducible experiment designed, a layer-by-layer numerical health check, or a ranked list of failure hypotheses backed by concrete numerical evidence."
-model: $(resolve_model.sh runtime numerical-debugger)
+model: {{model.numerical-debugger}}
 color: green
 tools: Read, Grep, Glob, Bash
 ---

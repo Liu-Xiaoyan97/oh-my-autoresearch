@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # session-start.sh - Claude Code session 启动时执行
-# 职责：observer sidecar 存活守卫 + 自动恢复
-# 检测三个状态：
-#   1. PID 文件存在且进程存活 → 基础存活
-#   2. observer.status 的 last_poll 在 60s 以内 → 健康存活（正在消费事件）
-#   3. 前两者任一不满足 → 清理残骸、重启、验证；一次重试兜底
-set -euo pipefail
+# 职责：1) 模板解析填充  2) observer sidecar 存活守卫 + 自动恢复
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNTIME_ROOT="${SCRIPT_DIR}/../../runtime"
+
+# Step 0: 解析模板占位符（幂等可重复）
+RESOLVE_SCRIPT="$RUNTIME_ROOT/scripts/utils/resolve_templates.sh"
+if [[ -x "$RESOLVE_SCRIPT" ]]; then
+    "$RESOLVE_SCRIPT" "$RUNTIME_ROOT"
+fi
+
+# Step 1-5: observer sidecar 存活守卫 + 自动恢复
 START_SCRIPT="$RUNTIME_ROOT/observer/scripts/lifecycle/start_observer.sh"
 STOP_SCRIPT="$RUNTIME_ROOT/observer/scripts/lifecycle/stop_observer.sh"
 STATUS_FILE="$RUNTIME_ROOT/observer/run/observer.status"
