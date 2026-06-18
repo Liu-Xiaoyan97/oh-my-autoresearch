@@ -1,4 +1,4 @@
-oh-my-autoresearch — 自动化神经网络架构研究循环框架
+# oh-my-autoresearch — 自动化神经网络架构研究循环框架
 ![oh-my-autoresearch](assets/oh-my-autoresearch.png)
 **oh-my-autoresearch** 是基于 [Claude Code](https://claude.ai/claude-code) 的自动化神经网络架构探索框架。它运行一个**闭环状态机**：探索方向 → 多视角评审 → 票选 → 代码修改 → 训练验证 → 经验回收，自动迭代改进神经网络模型。
 
