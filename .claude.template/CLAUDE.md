@@ -98,6 +98,12 @@
    这样 agent prompt 中的 `${goal}` 在运行时被解析为实际目标值，
    修改 `objective.json["goal"]` 无需同步修改任何 prompt 文件。
 
+   **${model} 解析**：spawn 任何 subagent（包括第一层 scout/summarizer/coder 和第二层
+   reviewer）前，运行 `runtime/scripts/utils/resolve_model.sh runtime` 获取
+   `objective.json["model"]` 的值（haiku/sonnet/opus/fable），将其作为 Agent tool 的
+   `model` 参数传递。Agent tool 的 model 参数优先级高于 agent .md 定义中的 model
+   frontmatter。修改 `objective.json["model"]` 即可一键切换所有 subagent 的模型。
+
    **基线代码重置**：在 spawn 任何第一层 subagent 之前，
    运行 `runtime/scripts/coding/revert_to_baseline.sh runtime`，
    将 `project_root` 重置到 baseline.json 记录的基线 commit。
