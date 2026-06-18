@@ -140,6 +140,7 @@
       "scripts/coding/smoke_test.sh",
       "scripts/coding/create_train_log.sh",
       "scripts/coding/commit_changes.sh",
+      "scripts/coding/revert_to_baseline.sh",
       "scripts/utils/atomic_write.py",
       "scripts/utils/file_lock.py",
       "scripts/utils/load_json.py",
