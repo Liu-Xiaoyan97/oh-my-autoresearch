@@ -54,6 +54,7 @@ def _final_data(runtime_root: Path, exp_name: str) -> dict:
         "metric_name": metric_name,
         "progress": progress,
         "latest_checkpoint": checkpoints[-1] if checkpoints else None,
+        "all_checkpoints": checkpoints,
     }
 
 
@@ -99,7 +100,17 @@ def prepare(runtime_root: Path, exp_name: str) -> dict:
     latest = final_data["latest_checkpoint"]
     emitted = []
 
-    if latest:
+    # 发射所有未写入的 eval 检查点（不仅 latest——训练可能短于 cron 间隔，
+    # 导致 monitor_training.py 从未触发，中间步骤全部缺失）
+    all_checkpoints = final_data.get("all_checkpoints", [])
+    if not all_checkpoints and latest:
+        all_checkpoints = [latest]
+    emitted_steps: set[int] = set()
+    for cp in all_checkpoints:
+        step = cp["val_step"]
+        if step in emitted_steps:
+            continue
+        emitted_steps.add(step)
         emitted.append(
             _emit(
                 runtime_root,
@@ -108,10 +119,10 @@ def prepare(runtime_root: Path, exp_name: str) -> dict:
                     "action": "update_metric",
                     "exp_name": exp_name,
                     "data": {
-                        "train_step": progress.get("train_step", latest["val_step"]),
+                        "train_step": progress.get("train_step", step),
                         "train_loss": progress.get("train_loss", 0.0),
-                        "val_step": latest["val_step"],
-                        "val_metric": latest["val_metric"],
+                        "val_step": step,
+                        "val_metric": cp["val_metric"],
                         "recovery_ready": True,
                     },
                 },
