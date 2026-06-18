@@ -8,7 +8,45 @@
       { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-start.sh" } ] }
     ],
     "PreToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/subagent_supervisor.py" }
+        ]
+      },
       { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-tool-use.sh" } ] }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/subagent_supervisor.py" }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/subagent_supervisor.py" }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "flow-arch-reviewer|math-theorist|numerical-debugger",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/subagent_supervisor.py" }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "flow-arch-reviewer|math-theorist|numerical-debugger",
+        "hooks": [
+          { "type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/subagent_supervisor.py" }
+        ]
+      }
     ],
     "SessionEnd": [
       { "hooks": [ { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop.sh" } ] }

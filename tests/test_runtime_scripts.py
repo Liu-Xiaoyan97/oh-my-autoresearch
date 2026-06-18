@@ -65,6 +65,71 @@ def test_training_log_parser_reports_primary_metric(tmp_path):
     assert payload["loss_exploded"] is False
 
 
+def test_prepare_recovery_emits_before_summarizer_without_waiting_for_observer(tmp_path):
+    runtime = copy_runtime(tmp_path)
+    log_file = runtime / "logs" / "train-of-exp_0.log"
+    log_file.write_text(
+        "train_step=100 train_loss=0.25\nEval at step 100: accuracy=0.81\n",
+        encoding="utf-8",
+    )
+    events_file = runtime / "observer" / "events" / "events.jsonl"
+    events_file.parent.mkdir(parents=True, exist_ok=True)
+    events_file.write_text("", encoding="utf-8")
+    emit_script = runtime / "observer" / "scripts" / "ingest" / "emit_event.py"
+    emit_script.write_text(
+        """#!/usr/bin/env python3
+import json
+import sys
+import uuid
+from pathlib import Path
+
+event_type, payload_raw, runtime_root = sys.argv[1:4]
+event = {
+    "event_id": str(uuid.uuid4()),
+    "event_type": event_type,
+    "payload": json.loads(payload_raw),
+}
+path = Path(runtime_root) / "observer" / "events" / "events.jsonl"
+with path.open("a", encoding="utf-8") as handle:
+    handle.write(json.dumps(event) + "\\n")
+print(json.dumps({"emitted": True, "event_id": event["event_id"]}))
+""",
+        encoding="utf-8",
+    )
+
+    result = run(
+        "python3",
+        str(runtime / "scripts" / "training" / "prepare_recovery.py"),
+        str(runtime),
+        "exp_0",
+    )
+    payload = json.loads(result.stdout)
+    queued = [
+        json.loads(line)
+        for line in events_file.read_text(encoding="utf-8").splitlines()
+    ]
+
+    assert payload["emitted"] is True
+    assert [event["payload"]["action"] for event in queued] == [
+        "update_metric",
+        "mark_complete",
+    ]
+    assert all(
+        event["payload"]["data"]["recovery_ready"] is True
+        for event in queued
+    )
+    assert not (runtime / "db" / "runtime.sqlite").exists()
+
+    checked = run(
+        "python3",
+        str(runtime / "scripts" / "training" / "prepare_recovery.py"),
+        str(runtime),
+        "exp_0",
+        "--check-only",
+    )
+    assert json.loads(checked.stdout)["emitted"] is True
+
+
 def test_observer_dispatch_writes_log_and_dynamic_metric(tmp_path):
     runtime = copy_runtime(tmp_path)
     run("python3", str(runtime / "scripts" / "database" / "init_db.py"), str(runtime))

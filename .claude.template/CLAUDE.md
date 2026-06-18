@@ -19,9 +19,9 @@
 - **系统只有两级 subagent，且这条规则对 team-lead 与所有 subagent 同等生效**：
   team-lead（第 0 层）只 spawn 第一层（`orthogonal-direction-scout`/`summarizer`/`coder`）；
   **`coder` 只能由 team-lead spawn，scout 与 summarizer 绝对不能 spawn `coder`（这是硬性红线）**。
-  第一层中持有 `Task` 的 `scout`/`summarizer` 只 spawn 第二层 reviewer
+  第一层中持有 `Agent` 的 `scout`/`summarizer` 只 spawn 第二层 reviewer
   （`flow-arch-reviewer`/`math-theorist`/`numerical-debugger`）；**第二层 reviewer 与
-  叶子 `coder` 无 `Task` 工具，不得再 spawn 任何 subagent——严禁出现第三级**。无论哪一层，
+  叶子 `coder` 无 `Agent` 工具，不得再 spawn 任何 subagent——严禁出现第三级**。无论哪一层，
   **被 spawn 的 agent 必须是上面已注册类型，禁止 `general_purpose`/未注册 agent**。
 - **零中间文件规约**：任何 agent 不得在当前仓库目录的任意位置创建文件（包括临时文件、中间文件、结果 JSON 等）。agent 间数据传递一律通过 stdout/stderr 管道（stdin）完成。**如果必须创建临时文件，统一使用 `/tmp` 目录**（由操作系统自动清理）。coder 对 `project/` 下被优化项目代码的修改是管线最终输出，不属于中间文件，由预提交守卫 7 判别。
 - **训练等长任务只能通过 `runtime/scripts/training/*` 驱动**：`generate_launch.sh` → `start_training.sh` → `monitor_training.py`。**严禁主程序自己用 `uv` / `python` / `nohup` 直跑训练或自造启动/监控命令**——必须且只能调用既定脚本。
@@ -89,8 +89,11 @@
 
 3. 若进入 Phase 1（方向探索 → 票选 → 代码 → 同步），team-lead 创建**嵌套结构**的
    subagent，并**串行**驱动三个第一层 subagent：`orthogonal-direction-scout` →
-   `summarizer` → `coder`。scout 与 summarizer 各自用 `Task` **并行**嵌套 spawn 第二层
-   reviewer；team-lead **绝不**自己直接调 reviewer（二级输出不进 team-lead 上下文）。
+   `summarizer` → `coder`。scout 与 summarizer 各自用后台 `Agent` **并行**嵌套 spawn
+   第二层 reviewer；team-lead **绝不**自己直接调 reviewer（二级输出不进 team-lead 上下文）。
+   三类 reviewer 每类恰好一个；`.claude/scripts/subagent_supervisor.py` 通过 hook 原子去重，
+   按后台输出活动维护心跳租约。失败/超时只能停止并单独重试对应角色一次，禁止整批补拉，
+   禁止创建“等待 agent”或用 `general-purpose` 查询旧 Agent。
 
    **候选池（candidate_pool）机制**：`knowledges/candidate_pool.json` 记录跨轮次共享的
    正交候选集，格式为 `[{"name": "<方法名>", "description": "<描述>"}]`。
@@ -206,7 +209,16 @@
       + `state` 写 `current_step=8, next_step=9`；进入 Phase 9。
 
 5. 若训练结束或失败，进入 Phase 9 经验回收：
-   - **只调用 `summarizer`**：它嵌套 spawn 三个 reviewer 做 recovery analysis，
+   - **先 emit 实验数据，后创建 summarizer（硬顺序）**：进入本阶段后第一条动作必须是
+     `python3 runtime/scripts/training/prepare_recovery.py runtime <exp_name>`。
+     该脚本重新解析最终训练日志，显式 emit 最新 `experiments update_metric` 与
+     `mark_complete`。`emit_event.py` 成功追加事件后即返回，不等待异步 observer 消费。
+     只有返回 JSON `emitted=true` 后才可继续；失败时必须停止并报告，严禁先拉起 summarizer。
+   - **随后只调用 `summarizer`**：Agent prompt 必须包含精确标记 `[phase=9]`，并把
+     `prepare_recovery.py` 返回的 `final_metrics` / `latest_checkpoint` 传给它。hook 会在
+     创建前再次只读校验对应 experiments 事件已进入 `events.jsonl`；未 emit 会拒绝创建。
+     它嵌套 spawn 三个
+     reviewer 做 recovery analysis，
      汇总后 **只返回 recovery-summary JSON**。team-lead 不直接调 reviewers。
    - 校验 recovery-summary（`recovery-summary.schema.json`）后，team-lead 读取 experiments
      中当前实验与 baseline 的主指标，同时读取 `objective.json["goal"]` 解析改进阈值

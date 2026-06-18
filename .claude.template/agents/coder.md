@@ -80,6 +80,6 @@ tools: Read, Grep, Glob, Bash, Write, Edit
 - **严禁被同级一级 subagent 调用**：`orthogonal-direction-scout` 与 `summarizer` 是你的
   同级兄弟（同属第一层），它们**没有权限** spawn 你。如果你的上下文显示被非 team-lead 的
   agent 调用，必须立即拒绝并报告违规。
-- 你**没有** `Task` 工具，**严禁 spawn 任何子 agent**（不嵌套第二层，更无第三级）。
+- 你**没有** `Agent` 工具，**严禁 spawn 任何子 agent**（不嵌套第二层，更无第三级）。
 - **严禁自 spawn**：你绝对不能 spawn 你自己的另一个实例（`coder`）。
 - 严禁使用 `general_purpose` / 未注册 agent。你只修改被优化项目代码并返回 commit-result JSON。

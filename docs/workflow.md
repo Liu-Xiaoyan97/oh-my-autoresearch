@@ -67,6 +67,8 @@
 
 ## Step 9: 经验回收
 
+- team-lead 先运行 `prepare_recovery.py`，显式 emit 最终实验指标与完成事件；
+  事件成功追加到 `events.jsonl` 后即可拉起 summarizer，不等待异步 observer 消费
 - 训练完成后三个 reviewer 分别从各自角度分析训练结果：
   - `flow-arch-reviewer` — 架构/数据流角度
   - `math-theorist` — 数学/优化理论角度

@@ -28,12 +28,26 @@ def test_forbidden_layouts_are_absent():
     assert [str(path.relative_to(REPO_ROOT)) for path in forbidden if path.exists()] == []
 
 
-def test_settings_do_not_log_tool_noise():
+def test_settings_register_scoped_subagent_supervision_hooks():
     settings = json.loads((REPO_ROOT / ".claude.template" / "settings.json").read_text(encoding="utf-8"))
     hooks = settings.get("hooks", {})
 
-    assert "PreToolUse" not in hooks
-    assert "PostToolUse" not in hooks
+    pre_matchers = {entry.get("matcher") for entry in hooks["PreToolUse"]}
+    post_matchers = {entry.get("matcher") for entry in hooks["PostToolUse"]}
+    failure_matchers = {entry.get("matcher") for entry in hooks["PostToolUseFailure"]}
+
+    assert "Agent|Task" in pre_matchers
+    assert post_matchers == {"Agent|Task"}
+    assert failure_matchers == {"Agent|Task"}
+    assert "SubagentStart" in hooks
+    assert "SubagentStop" in hooks
+
+
+def test_supervisor_is_declared_in_manifest():
+    manifest = json.loads((REPO_ROOT / "manifest.json").read_text(encoding="utf-8"))
+
+    assert "scripts/subagent_supervisor.py" in manifest["claude_template"]["files"]
+    assert "scripts/training/prepare_recovery.py" in manifest["runtime_template"]["files"]
 
 
 def test_registered_agents_are_explicit_and_no_general_purpose():
