@@ -12,6 +12,7 @@
   "eval_n_steps": 1000,
   "devices": ["mps"],
   "poll_interval": 2,
+  "subagent_heartbeat_interval": 300,
   "model": {
     "default": "haiku",
     "orthogonal-direction-scout": "haiku",
