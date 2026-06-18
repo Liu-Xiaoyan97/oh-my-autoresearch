@@ -20,8 +20,7 @@ Phase 1 **第一层** subagent（方向探索）。team-lead 直接 spawn 你，
 2. **单次、并行** spawn 三个 reviewer（**且只在第 2 步做这一次，永远不做第二次**）：
    - 在**同一条消息**中同时发起三个 `Task` 调用。
    - 三个 `Task` 的参数分别是 `flow-arch-reviewer`、`math-theorist`、`numerical-debugger`。
-   - 把 `${goal}`（由 team-lead 从 `objective.json["goal"]` 解析并传入）作为上下文
-     传给每个 reviewer，让它们自行解析改进阈值和指标。
+   - 把 `{{goal}}` 作为上下文传给每个 reviewer，让它们自行解析改进阈值和指标。
    - `Task` 是**阻塞调用**：发起后你必须**阻塞等待三个 Task 全部返回**才能进入第 3 步。
    - ⚠ **严禁在等返回过程中再次 spawn reviewer**——无论什么理由都不创建第二批/第三批。
    - ⚠ **同一个 reviewer 类型（如 flow-arch-reviewer）只能 spawn 一次**，绝不 spawn 第二个同名实例。

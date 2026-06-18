@@ -92,16 +92,15 @@
    - 载入历史经验（读取 knowledges/baseline.json、learned.json、rejected.json 构建 prompt 上下文），然后 emit `state` 事件推进：`current_step=1, next_step=2, iteration=<当前 iteration>, exp_name=<当前 exp_name>`。
    - 然后进入 Phase 1 方向探索。
 
-   **${goal} 解析**：spawn 任何第一层 subagent（scout/summarizer/coder）前，
-   从 `runtime/states/objective.json["goal"]` 直接读取当前目标值
-   （`{{goal}}`），将其注入 subagent 的上下文参数中以替换 `${goal}` 占位符。
-   修改 `objective.json["goal"]` 后重启 claude session 使新值生效。
+   **${goal} 解析**：spawn 任何第一层 subagent 前，
+   读取 `runtime/states/objective.json["goal"]`（`{{goal}}`），
+   注入 subagent 上下文替换 `${goal}`。
+   修改 `objective.json["goal"]` 后需重启 session。
 
-   **基线代码重置**：在 spawn 任何第一层 subagent 之前，
+   **基线代码重置**：spawn 任何第一层 subagent 前，
    运行 `runtime/scripts/coding/revert_to_baseline.sh runtime`，
-   将 `project_root` 重置到 baseline.json 记录的基线 commit。
-   确保每轮实验在干净的基线代码上进行，不被之前被拒实验的代码修改污染。
-   若 baseline.json 不存在、无 commit_id 或 project_root 无 git 仓库则跳过。
+   将 `project_root` 重置到基线 commit。
+   若 baseline.json 不存在、无 commit_id 或 project_root 无 git 则跳过。
 
 3. 若进入 Phase 1（方向探索 → 票选 → 代码 → 同步），team-lead 创建**嵌套结构**的
    subagent，并**串行**驱动三个第一层 subagent：`orthogonal-direction-scout` →
@@ -134,50 +133,32 @@
                                        #   建 train 日志、git 提交 (一级叶子，无嵌套)
    ```
 
-   - **创建嵌套结构后**，通过 observer 写日志"两级 subagent 创建成功"。
-   - **一级串行、二级并行**：scout 销毁后才轮到 summarizer、summarizer 销毁后才轮到
-     coder；每个一级 subagent 内部的三个 reviewer 并行。
-   - **一级 subagent 用前台（阻塞）`Task`/Agent 调用：在它销毁（返回）之前，主程序
-     必须保持阻塞等待其返回值，绝不轮询、不反复查询其状态、不建 cron。** 调用一返回
-     即视为该 subagent 销毁，再推进状态。cron 轮询**只**用于训练那种 nohup 后台长任务
-     （见第 4 步），**不用于 subagent**——subagent 的阻塞返回本身就是完成信号。
+   - **创建嵌套结构后**，emit log"两级 subagent 创建成功"。
+   - **一级串行（scout→summarizer→coder），二级并行**。
+   - **一级 subagent 用阻塞 Agent 调用**：等待返回值即完成，不轮询、不建 cron。
 
-   每个一级 subagent **销毁（返回）后**由 team-lead 推进状态（exp_name=`<exp_name>`）。
-   **推进状态 = emit observer `state` 事件让 observer 写 states.json；team-lead 绝不自己写
-   states.json（无写权）。PreToolUse hook 会拦截直接写入 states.json 的命令。**
-   下文"states.json `current_step=X, next_step=Y`"指该 `state` 事件 payload 的目标值，
-   写盘由 observer 完成。`exploration` 事件已实现**自动发射**（见下方 a-c 的说明），
-   team-lead 无需再手动调用 emit_event.py：
+   每个一级 subagent **销毁后** emit `state` 事件推进（observer 写盘）：
+   `current_step=X, next_step=Y, exp_name=<exp_name>`。
+   `exploration` 事件由 `validate_subagent_result.py` **自动发射**（见下方 a-c），
+   无需 team-lead 手动调用 emit_event.py：
 
    a. **scout 销毁 → 状态 3**：调用 `validate_subagent_result.py` 校验其 orthogonal-set JSON
-      （**该脚本自动** emit `exploration` 事件 `action=update_orthogonal_candidates`、
-      `data.orthogonal_direction_scout=<去重后正交候选集>`；
-      **并自动** emit `candidate_pool update` 事件将候选集写入
-      `knowledges/candidate_pool.json`）。写日志"正交候选集生成完成"；
+      **自动发射**: exploration `action=update_orthogonal_candidates` + candidate_pool `update`。
+      写日志"正交候选集生成完成"；
       emit `state` 事件 `current_step=3, next_step=4`。
-      ⚠ **注意**：exploration 和 candidate_pool 事件均已被自动发射，**不要**再手动调 emit_event.py。
    b. **summarizer 销毁 → 状态 4**：调用 `validate_subagent_result.py` 校验其 decision JSON
-      （**该脚本自动** emit `exploration` 事件 `action=update_decision`、
-      `data.decision=<票选最高方法>`；
-      **并自动** emit `candidate_pool remove` 事件从
-      `knowledges/candidate_pool.json` 中删除被选中的候选）。
+      **自动发射**: exploration `action=update_decision` + candidate_pool `remove`。
       写日志"票选最高方法完成"；
       emit `state` 事件 `current_step=4, next_step=5`。
-      ⚠ **注意**：exploration 和 candidate_pool 事件均已被自动发射，**不要**再手动调 emit_event.py。
    c. **coder 销毁 → 状态 5**：调用 `validate_subagent_result.py phase=5` 校验其 commit-result JSON
-      （**该脚本自动** emit `exploration` 事件 `action=update_commit`、
-      `data.commit_id=<commit id>`）。写日志"代码变更完成"；
+      **自动发射**: exploration `action=update_commit`。写日志"代码变更完成"；
       emit `state` 事件 `current_step=5, next_step=6`。
-      ⚠ **注意**：exploration 事件已被自动发射，**不要**再手动调 emit_event.py。
-      （**remote 模式**：coder 先调用 `commit_changes.sh` 在本地 project_root 仓库提交（取真实 SHA），
-      再执行 `copy_to_remote.sh` 将代码覆盖到远端。commit_id 为 `commit_changes.sh` 回显的真实 SHA。）
-	      ⚠ 所有修改必须基于干净基线：Phase 0 已执行 revert_to_baseline.sh，
-	      coder 也会在 Step 0 中再次验证。严禁在受污染代码上直接修改。
+      （**remote 模式**：commit_changes.sh 提交后执行 copy_to_remote.sh 覆盖远端。）
+	      ⚠ 所有修改必须基于干净基线，严禁在污染代码上直接修改。
 
    d. **所有 subagent 销毁后 → 状态 6**：
-      - **remote=false（本地）**：ssh 登录跳板机、从远程仓库同步代码；写日志"代码上传成功"。
-      - **remote=true**：代码已由 coder 的 `copy_to_remote.sh` 覆盖上传，无需再次同步；写日志
-        "代码已同步至远端"。
+      - **remote=false**：ssh 同步代码；写日志"代码上传成功"。
+      - **remote=true**：已有 coder 上传，跳过；写日志"代码已同步至远端"。
       emit `state` 事件 `current_step=6, next_step=7`。
 
    **恢复守卫**：当 `current_step ∈ {3,4,5}` 时，team-lead 检查该步对应的下一个一级
@@ -206,17 +187,11 @@
       stderr/stdout 和 objective 传给它。`coder` 只能修改被优化项目的启动 Python/脚本入口，
       使其兼容 `generate_launch.sh` 和生成的 `launch_<exp_name>.sh`；不得修改 runtime 脚本或
       `launchscripts/` 里的生成物。
-   c. **启动后立刻 `CronCreate` 建一个定时轮询任务**（先调用
-      使用 `{{poll_interval}}` 分钟（由 session-start hook 从 objective.json 解析填充），
-      拼成 `*/<poll_interval> * * * *` 作为 cron 表达式），每次触发运行
+   c. **启动后立刻 `CronCreate` 建一个定时轮询任务**（使用 `*/{{poll_interval}} * * * *` 作为 cron 表达式），每次触发运行
       `runtime/scripts/training/monitor_training.py runtime <exp_name>` 解析进度并唤醒
-      team-lead 检查。**绝不允许**用前台 `sleep`、`while sleep`、`sleep && monitor`
-      之类的轮询循环,也不允许自己用 `uv run`/`python` 跑训练或监控。
-      ⚠ `monitor_training.py` **已自带自动发射**所有未写入的 eval 检查点指标
-      （通过 `experiments update_metric` 事件），**team-lead 无需再手动发射
-      update_metric 事件**。模型只需读取 monitor 返回的 training-progress JSON
-      判断训练是否结束/失败。**所以 cron 每次触发后，模型只需要读 progress JSON，
-      不做其它 emit 操作。**
+      team-lead 检查。**严禁前台 sleep/while 轮询或直跑 python 训练**。
+      ⚠ `monitor_training.py` 自动通过 `experiments update_metric` 事件写入
+      eval 指标。cron 触发后只需读其返回的 progress JSON 判断结束/失败。
    d. cron 每次触发读 monitor 输出判断训练是否结束/失败。训练结束 → 状态 8:
       **立即 `CronDelete` 取消该轮询 cron**(绝不留孤儿 cron);emit observer `log` 事件
       "训练结束" + `state` 事件让 observer 写 states.json `current_step=8, next_step=9`;
@@ -235,24 +210,19 @@
       若 `train_on_remote.sh` 返回非 0 或拿不到 PID：emit `log` 记录失败原因，emit `state` 回退
       `current_step=5,next_step=6`，随后拉起注册 subagent `coder` 修被优化项目训练入口
       （只改 `project_root` 下源码，不改 runtime/launchscripts），修好后重新 `copy_to_remote` 并重试。
-   b. **状态 7 → cron 轮询进度**：先调用
-      使用 `{{poll_interval}}` 分钟（由 session-start hook 从 objective.json 解析填充），
-      拼成 `*/<poll_interval> * * * *`，再用 `CronCreate` 建定时任务，每次触发运行
+   b. **状态 7 → cron 轮询进度**：使用 `*/{{poll_interval}} * * * *` 通过 `CronCreate` 建定时任务，每次触发运行
       `<project_root>/launchscripts/query_from_remote.sh <exp_name>`（登录 hosts 第一个 host，
       取回远端日志到本地 `runtime/logs/train-of-<exp_name>.log`，再用 `monitor_training.py` 解析为
       training-progress JSON）。**绝不用前台 `sleep`/`while sleep`，也不自己 ssh 跑监控。**
-      ⚠ `monitor_training.py` **已自带自动发射**所有未写入的 eval 检查点指标
-      （通过 `experiments update_metric` 事件），**team-lead 无需再手动发射
-      update_metric 事件**。模型只需读取 progress JSON 判断训练是否结束/失败。
+      ⚠ `monitor_training.py` 自动通过 `experiments update_metric` 事件写入 eval 指标。cron 触发后只需读 progress JSON。
    c. cron 每次触发读 query 输出判断是否结束/失败（如 train_step 达到 `num_training_steps`）。
       训练结束 → **主程序必须立即 `CronDelete` 取消该轮询 cron**（远程训练同样绝不留孤儿 cron）；
       emit `log`"训练结束" + `experiments` `action=mark_complete`、`exp_name=<exp_name>`(status=completed)
       + `state` 写 `current_step=8, next_step=9`；进入 Phase 9。
 
 5. 若训练结束或失败，进入 Phase 9 经验回收：
-   - **只调用 `summarizer` 协调者**（嵌套）：它用 `Task` 嵌套 spawn 三个 reviewer
-     做 recovery analysis、在自己上下文里汇总，**只把 recovery-summary JSON 返回
-     给你**。你不要自己直接调 reviewers。
+   - **只调用 `summarizer`**：它嵌套 spawn 三个 reviewer 做 recovery analysis，
+     汇总后 **只返回 recovery-summary JSON**。team-lead 不直接调 reviewers。
    - 校验 recovery-summary（`recovery-summary.schema.json`）后，team-lead 读取 experiments
      中当前实验与 baseline 的主指标，同时读取 `objective.json["goal"]` 解析改进阈值
      threshold（解析方式：在 goal 文本中查找 `"至少"` 或
@@ -311,61 +281,41 @@ payload 必须符合 `runtime/observer/schemas/*.schema.json`。
 > 无需再手动调用 `emit_event.py` 发射这些事件。Phase 0 的 `validate_runtime.py` 会自动
 > 校验事件链完整性（参见 `validate_event_chain.py`）。
 
-**写入参数一律"文件优先"：凡有权威文件来源的上下文参数，writer 一律从文件读取，payload 只作兜底**，
-team-lead 无需（也不应依赖）在 payload 里给定它们：
+**写入参数"文件优先"**：凡有文件来源的参数，writer 从文件读取，payload 只兜底：
 
-- `exp_name`：所有 writer（`experiments`/`exploration`/`knowledge`/`log`）统一从
-  `states.json.exp_name` 读取（`schema_spec.states_exp_name`）。即使 payload 省略或给错，
-  observer 也会落到当前实验；`clear_all` 无需 `exp_name`。
-- `knowledge` 条目的 `data.exp_name` 由 writer 注入为 `states.json.exp_name`；
-  `data.method_summary` **也由 writer 自动解析**——从 exploration 表的 decision 列
-  （已解析为候选方法名）读取，而非依赖 payload 中的 `method_summary`。
-  所以你无需在 knowledge 事件的 payload 里提供 `method_summary`。
-- experiments 的指标列名由 writer 从 `objective.json`（`primary_metrics.name`/`eval_n_steps`）推导。
+- `exp_name`：所有 writer 统一从 `states.json.exp_name` 读取。payload 可省略。
+- `data.method_summary`：writer 自动从 exploration 表的 decision 列注入 payload。无需在 payload 中提供。
+- experiments 指标列名：writer 从 `objective.json`（`primary_metrics.name`/`eval_n_steps`）推导。
 
-**唯一例外是 `state` 事件**：它是 `states.json` 的写入者本身，payload 即 team-lead 决定的状态
-转移信号（`current_step`/`next_step`/`iteration`/`exp_name`），无文件可读，必须由 payload 给定。
+**唯一例外是 `state` 事件**：它负责写入 states.json 本身，
+`current_step`/`next_step`/`iteration`/`exp_name` 必须由 payload 给定。
 
-真正的"数据本体"（log 文本、指标值、候选集/决策内容、knowledge 的 method_summary/reason）没有
-文件来源，仍来自 payload。
+数据本体（log 文本、指标值、候选集/决策、knowledge 的 reason）仍来自 payload。
 
-## Subagent 返回（嵌套结构）
+## Subagent 返回（两级）
 
-调用层级（两级）：
+| 层级 | subagent | 输出 JSON | Schema |
+|------|----------|-----------|--------|
+| 第一层 | `orthogonal-direction-scout` phase=1 | orthogonal-set | `orthogonal-set.schema.json` |
+| 第一层 | `summarizer` phase=1 | decision | `decision.schema.json` |
+| 第一层 | `coder` phase=5 | commit result | `commit-result.schema.json` |
+| 第一层 | `summarizer` phase=9 | recovery-summary | `recovery-summary.schema.json` |
+| 第二层 | reviewer（Phase 1） | proposal / vote | 各自 schema |
+| 第二层 | reviewer（Phase 9） | recovery | 各自 schema |
 
-- **team-lead 直接、串行调用三个第一层 subagent**：`orthogonal-direction-scout` →
-  `summarizer` → `coder`。
-- **scout 与 summarizer 各自是第二层 reviewer 的协调者**：用 `Task` **并行**嵌套 spawn
-  `flow-arch-reviewer` + `math-theorist` + `numerical-debugger`，在自己上下文里消化它们
-  的 JSON，**只向 team-lead 返回一份汇总 JSON**。reviewer 的原始输出**不回 team-lead**
-  （scout 收到的是"找优化点"proposal，summarizer 收到的是"评分"vote）。
-- **coder 是第一层叶子**，不嵌套子 subagent。
+- 第一层 JSON 由 `validate_subagent_result.py` 校验通过后**自动发射** events。
+- 第二层 reviewer 的原始输出由 scout/summarizer 内部消化，不回 team-lead。
+- 第一层校验失败则停止推进、记录 log、告知用户修正。
 
-team-lead 需要校验的 JSON（第一层返回，**exploration 事件自动发射**）：
-
-- `orthogonal-direction-scout` phase=1: `orthogonal-set.schema.json`
-- `summarizer` phase=1: `decision.schema.json`；phase=9: `recovery-summary.schema.json`
-- `coder` **phase=5**（最终提交结果）: `commit-result.schema.json`
-  - （coder phase=1 用 `patch-plan.schema.json` 校验修改计划，不自动发射事件）
-
-第二层 reviewer 的 proposal / vote / recovery 由调用它的 scout / summarizer **内部校验**，
-不回 team-lead。
-
-如果第一层校验失败，停止推进当前阶段，记录 observer log，并向用户说明需要修正的
-结构化输出。
-
-## 事件自动发射与守卫
-
-`validate_subagent_result.py` 校验通过后**自动发射**对应 events（无需手动调用 emit_event.py）：
+## 事件自动发射
 
 | Agent (phase) | 自动发射的事件 |
 |---------------|---------------|
 | `orthogonal-direction-scout` phase=1 | `exploration update_orthogonal_candidates` + `candidate_pool update` |
 | `summarizer` phase=1 | `exploration update_decision` + `candidate_pool remove` |
 | `coder` phase=5 | `exploration update_commit` |
-| `summarizer` phase=9 | 不自动发射（由 LLM 对比 baseline 后手动决定 knowledge 事件） |
+| `summarizer` phase=9 | 不自动发射（LLM 对比后手动决定 knowledge 事件） |
 
-Phase 0 校验（`validate_runtime.py`）自动检测事件链完整性，若缺失可通过
-`validate_event_chain.py --fix` 自动修复。
+Phase 0 的 `validate_runtime.py` 自动检测事件链完整性，缺失可通过 `validate_event_chain.py --fix` 修复。
 
 **PreToolUse hook** 拦截直接写入 `states.json` 或调用 observer lifecycle 脚本的命令。
