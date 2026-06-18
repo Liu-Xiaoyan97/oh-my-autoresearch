@@ -46,6 +46,7 @@
 | `experiments-write.schema.json` | 约束 experiments 表写入事件 payload |
 | `exploration-write.schema.json` | 约束 exploration 表写入事件 payload |
 | `knowledge-write.schema.json` | 约束 knowledge JSON 写入事件 payload |
+| `candidate-pool-write.schema.json` | 约束候选方案详情写入事件 payload |
 
 ## schema 和脚本绑定关系
 
@@ -57,3 +58,4 @@
 - `validate_experiments_write.py` → experiments-write.schema.json
 - `validate_exploration_write.py` → exploration-write.schema.json
 - `validate_knowledge_write.py` → knowledge-write.schema.json
+- `validate_candidate_pool_write.py` → candidate-pool-write.schema.json

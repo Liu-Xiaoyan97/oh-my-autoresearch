@@ -47,10 +47,14 @@ CREATE TABLE exploration (
 
 ```
 team-lead → emit_event.py → events.jsonl → observer_daemon → dispatch → writers → DB/Knowledge
+                                                                   失败 → deadletter.jsonl
+                                                                   
+7 种 event_type: state | log | experiments | exploration | knowledge | candidate_pool | control
 ```
 
 ### 状态机总览
 
 ```
-Phase 0 (Validation) → Phase 1 (Exploration) → Phase 2 (Coding) → Phase 3 (Training) → Phase 9 (Recovery)
+0 (校验) → 1 (历史载入) → 2 (历史就绪) → 3 (方向探索) → 4 (票选决策) → 5 (代码变更)
+    → 6 (远程同步) → 7 (训练启动) → 8 (训练结束) → 9 (经验回收) → 返回 Step 1
 ```

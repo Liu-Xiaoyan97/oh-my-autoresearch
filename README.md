@@ -1,6 +1,6 @@
-# research-runtime — 自动化神经网络架构研究循环框架
-
-**research-runtime** 是基于 [Claude Code](https://claude.ai/claude-code) 的自动化神经网络架构探索框架。它运行一个**闭环状态机**：探索方向 → 多视角评审 → 票选 → 代码修改 → 训练验证 → 经验回收，自动迭代改进神经网络模型。
+oh-my-autoresearch — 自动化神经网络架构研究循环框架
+![oh-my-autoresearch](assets/oh-my-autoresearch.png)
+**oh-my-autoresearch** 是基于 [Claude Code](https://claude.ai/claude-code) 的自动化神经网络架构探索框架。它运行一个**闭环状态机**：探索方向 → 多视角评审 → 票选 → 代码修改 → 训练验证 → 经验回收，自动迭代改进神经网络模型。
 
 ## 项目构成
 
@@ -45,36 +45,7 @@ research-runtime/
 
 ### 架构概览
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    team-lead (Claude)               │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  状态机 (states.json): Step 0→1→...→9→0        │  │
-│  └───────────────────────────────────────────────┘  │
-│           │ 串行调用           │            │        │
-│  ┌────────▼────────┐ ┌───────▼──────┐ ┌────▼─────┐  │
-│  │ direction-scout │ │ summarizer   │ │  coder   │  │
-│  │  ┌────┬────┬──┐ │ │ ┌────┬───┬──┐│ │  (叶子)   │  │
-│  │  │AR │ MT │ ND│ │ │ │ AR │MT │ND││ │          │  │
-│  │  └────┴────┴──┘ │ │ └────┴───┴──┘│ └──────────┘  │
-│  └─────────────────┘ └───────────────┘              │
-│           │ emit_event.py (唯一持久化出口)              │
-│           ▼                                          │
-│  ┌───────────────────────────────────────────────┐  │
-│  │          Observer Sidecar (Python daemon)       │  │
-│  │  events.jsonl → offset consume → dispatch      │  │
-│  │    ├─ write_state.py        → states.json       │  │
-│  │    ├─ write_log.py          → observations/*    │  │
-│  │    ├─ write_exploration.py  → SQLite            │  │
-│  │    ├─ write_experiments.py  → SQLite            │  │
-│  │    ├─ write_knowledge.py    → knowledges/*      │  │
-│  │    ├─ 失败 → deadletter.jsonl                   │  │
-│  │    └─ state=9 触发 → LLM observation 生成      │  │
-│  │         (独立 api/key/model)                    │  │
-│  │       └─ 存 observations/ + 回灌 knowledges     │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
-```
+![archtecture](assets/architecture.png)
 
 **核心设计原则：**
 
@@ -591,3 +562,7 @@ ruff check .
 - **脚本约束**：训练必须通过 `generate_launch.sh` → `start_training.sh` → `monitor_training.py` 驱动
 - **subagent 约束**：只能使用 `.claude/agents/` 注册的 6 种 subagent，严禁降级到通用 agent
 - **远程训练**：通过 `ssh_chain.py` 支持 SSH 链式跳板机连接
+
+
+## QQ交流群
+![qq群](assets/qrcode_1781765868615.jpg)
