@@ -121,6 +121,7 @@ def main():
         last_emitted = tracker.get(exp_name, 0)
 
         new_checkpoints = [cp for cp in all_checkpoints if cp["val_step"] > last_emitted]
+        emitted_max = last_emitted
         for cp in new_checkpoints:
             payload = {
                 "action": "update_metric",
@@ -135,12 +136,12 @@ def main():
             ok = _emit_event(repo_root, "experiments", payload)
             if ok:
                 print(f"[monitor_training] 自动发射 step_{cp['val_step']} metric={cp['val_metric']:.4f}")
+                emitted_max = cp["val_step"]
             else:
                 print(f"[monitor_training] 发射 step_{cp['val_step']} 失败", file=sys.stderr)
 
-        if new_checkpoints:
-            max_step = max(cp["val_step"] for cp in new_checkpoints)
-            tracker[exp_name] = max(last_emitted, max_step)
+        if emitted_max > last_emitted:
+            tracker[exp_name] = emitted_max
             _save_tracker(repo_root, tracker)
 
     print(json.dumps(progress, indent=2))
