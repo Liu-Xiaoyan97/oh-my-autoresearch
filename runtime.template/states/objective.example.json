@@ -12,5 +12,13 @@
   "eval_n_steps": 1000,
   "devices": ["mps"],
   "poll_interval": 2,
-  "model": "haiku"
+  "model": {
+    "default": "haiku",
+    "orthogonal-direction-scout": "haiku",
+    "summarizer": "haiku",
+    "coder": "haiku",
+    "flow-arch-reviewer": "haiku",
+    "math-theorist": "haiku",
+    "numerical-debugger": "haiku"
+  }
 }

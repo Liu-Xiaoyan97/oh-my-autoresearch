@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# resolve_model.sh — 从 objective.json 读取 model 字段并输出。
-# 用法: resolve_model.sh [runtime_root]
-# 输出: model 字段的短名称（sonnet / opus / haiku / fable），默认 haiku
+# resolve_model.sh — 从 objective.json 的 model 映射中按 subagent 名称查找模型。
+# 用法: resolve_model.sh <runtime_root> <subagent_name>
+# 示例: resolve_model.sh runtime orthogonal-direction-scout  # → haiku
+# 输出: model 短名称（haiku / sonnet / opus / fable），供 Agent tool 的 model 参数使用。
 #
-# team-lead 在 spawn subagent 前调用此脚本，将结果作为 Agent 调用的 model 参数。
-# 所有 agent prompt 中的 ${model} 占位符由 team-lead 在 spawn 时填入此值。
-# Agent tool 的 model 参数优先级高于 agent .md 定义中的 model frontmatter。
+# 查找顺序：
+#   1. objective.json["model"]["<subagent_name>"]
+#   2. objective.json["model"]["default"]
+#   3. 硬编码默认值 "haiku"
 
 set -uo pipefail
 
 RUNTIME_ROOT="${1:-runtime}"
+SUBAGENT="${2:-default}"
 OBJECTIVE_FILE="${RUNTIME_ROOT}/states/objective.json"
 
 if [ ! -f "$OBJECTIVE_FILE" ]; then
@@ -19,12 +22,23 @@ fi
 
 python3 -c "
 import json, sys
+
 valid = {'sonnet', 'opus', 'haiku', 'fable'}
+subagent = '${SUBAGENT}'
+
 try:
     obj = json.load(open('${OBJECTIVE_FILE}'))
-    model = obj.get('model', 'haiku')
-    if isinstance(model, str) and model.strip().lower() in valid:
-        print(model.strip().lower())
+    models = obj.get('model', {})
+    if isinstance(models, str):
+        # 兼容旧格式：model 为单个字符串时作为所有 subagent 的模型
+        model = models.strip().lower()
+        print(model if model in valid else 'haiku')
+    elif isinstance(models, dict):
+        model = models.get(subagent) or models.get('default', 'haiku')
+        if isinstance(model, str) and model.strip().lower() in valid:
+            print(model.strip().lower())
+        else:
+            print('haiku')
     else:
         print('haiku')
 except Exception:
