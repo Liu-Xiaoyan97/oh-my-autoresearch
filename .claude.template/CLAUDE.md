@@ -93,10 +93,9 @@
    - 然后进入 Phase 1 方向探索。
 
    **${goal} 解析**：spawn 任何第一层 subagent（scout/summarizer/coder）前，
-   运行 `runtime/scripts/utils/resolve_goal.sh runtime` 获取 `objective.json["goal"]`
-   的值，将其注入 subagent 的上下文参数中以替换 `${goal}` 占位符。
-   这样 agent prompt 中的 `${goal}` 在运行时被解析为实际目标值，
-   修改 `objective.json["goal"]` 无需同步修改任何 prompt 文件。
+   读取 `runtime/states/resolved_goal.txt` 获取 `objective.json["goal"]`
+   的值（由 `/loop-set` 预解析写入），将其注入 subagent 的上下文参数中以替换 `${goal}` 占位符。
+   修改 `objective.json["goal"]` 后需重新执行 `/loop-set` 使新值生效。
 
    **基线代码重置**：在 spawn 任何第一层 subagent 之前，
    运行 `runtime/scripts/coding/revert_to_baseline.sh runtime`，
@@ -208,7 +207,7 @@
       使其兼容 `generate_launch.sh` 和生成的 `launch_<exp_name>.sh`；不得修改 runtime 脚本或
       `launchscripts/` 里的生成物。
    c. **启动后立刻 `CronCreate` 建一个定时轮询任务**（先调用
-      `runtime/scripts/utils/resolve_poll_interval.sh runtime` 获取 `${poll_interval}` 分钟，
+      读取 `runtime/states/resolved_poll_interval.txt` 获取 `${poll_interval}` 分钟（由 `/loop-set` 预解析写入），
       拼成 `*/<poll_interval> * * * *` 作为 cron 表达式），每次触发运行
       `runtime/scripts/training/monitor_training.py runtime <exp_name>` 解析进度并唤醒
       team-lead 检查。**绝不允许**用前台 `sleep`、`while sleep`、`sleep && monitor`
@@ -237,7 +236,7 @@
       `current_step=5,next_step=6`，随后拉起注册 subagent `coder` 修被优化项目训练入口
       （只改 `project_root` 下源码，不改 runtime/launchscripts），修好后重新 `copy_to_remote` 并重试。
    b. **状态 7 → cron 轮询进度**：先调用
-      `runtime/scripts/utils/resolve_poll_interval.sh runtime` 获取 `${poll_interval}` 分钟，
+      读取 `runtime/states/resolved_poll_interval.txt` 获取 `${poll_interval}` 分钟（由 `/loop-set` 预解析写入），
       拼成 `*/<poll_interval> * * * *`，再用 `CronCreate` 建定时任务，每次触发运行
       `<project_root>/launchscripts/query_from_remote.sh <exp_name>`（登录 hosts 第一个 host，
       取回远端日志到本地 `runtime/logs/train-of-<exp_name>.log`，再用 `monitor_training.py` 解析为
