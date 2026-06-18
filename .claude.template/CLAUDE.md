@@ -104,6 +104,8 @@
    `model` 参数传递。Agent tool 的 model 参数优先级高于 agent .md 定义中的 model
    frontmatter。`objective.json["model"]` 是按 subagent name 查找的字典，支持为不同
    subagent 指定不同模型，缺失时回退到 `model.default`。
+   agent `.md` 文件中的 `model:` 字段已使用 `$(resolve_model.sh runtime <name>)` 占位符，
+   作为契约声明；实际生效值为 spawn 时传递的 Agent tool model 参数。
 
    **基线代码重置**：在 spawn 任何第一层 subagent 之前，
    运行 `runtime/scripts/coding/revert_to_baseline.sh runtime`，

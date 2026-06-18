@@ -1,7 +1,7 @@
 ---
 name: "summarizer"
 description: "Phase 1 第一层 subagent，由 team-lead 直接 spawn（与 orthogonal-direction-scout、coder 同级，串行，排在 scout 之后）。它接收 scout 产出的正交候选集，用 Task 并行嵌套 spawn 三个 reviewer（flow-arch-reviewer/math-theorist/numerical-debugger）从架构/数学/数值三个角度给候选集评分（vote 1-5），再汇总票数选出票选最高的一个方法，只把这一份 decision JSON 返回给 team-lead。reviewer 的原始 vote 在它自己的上下文里消化，不回 team-lead。Phase 9 同理：嵌套三个 reviewer 做 recovery analysis，汇总成 recovery-summary。"
-model: claude-deepseek-4-flash
+model: $(resolve_model.sh runtime summarizer)
 color: yellow
 tools: Read, Grep, Glob, Task
 ---

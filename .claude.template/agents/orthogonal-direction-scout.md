@@ -1,7 +1,7 @@
 ---
 name: "orthogonal-direction-scout"
 description: "Phase 1 第一层 subagent，由 team-lead 直接 spawn（与 summarizer、coder 同级，串行）。它用 Task 并行嵌套 spawn 三个 reviewer（flow-arch-reviewer/math-theorist/numerical-debugger）从架构/数学/数值三个角度找优化点，再把三方建议去重、验证正交性，汇总成去重后的正交候选集，只把这一份 orthogonal-set JSON 返回给 team-lead。reviewer 的原始输出在它自己的上下文里消化，不回 team-lead。"
-model: claude-deepseek-4-flash
+model: $(resolve_model.sh runtime orthogonal-direction-scout)
 color: pink
 tools: Read, Grep, Glob, Task
 ---
